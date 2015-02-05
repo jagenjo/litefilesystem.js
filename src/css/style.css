@@ -1,0 +1,270 @@
+.startup-dialog, .login-dialog {
+	width: 300px;
+}
+
+body {
+	padding-top: 50px;
+}
+
+button:focus {
+	outline:0 !important;
+}
+
+.folders-table, .files-table {
+	border: 1px solid #DDD;
+	height: 500px;
+	overflow: auto;
+}
+
+.folders-table .header, .files-table  .header{
+	width: 100%;
+	border-bottom: 1px solid #DDD;
+}
+
+.folders-table .header h3 {
+	padding: 10px;
+	margin: 0;
+}
+
+.folders-table .content {
+	padding: 20px;
+}
+
+.folder-item {
+	padding-left: 2em;
+	width: 100%;
+	cursor: pointer;
+}
+
+.folder-item .glyphicon {
+	color: #888;
+	padding: 0 0.5em;
+}
+
+.folder-item .name {
+	padding: 0.2em;
+	padding-left: 0.3em;
+	font-size: 1.2em;
+	border-radius: 2px;
+}
+
+.folder-item:hover {
+	background-color: #EEF;
+}
+
+.folder-item.selected {
+	background-color: #DDF;
+}
+
+.file-item {
+	position: relative;
+	width: 128px;
+	height: 128px;
+	overflow: hidden;
+	margin: 3px;
+	background-color: white;
+	border: 2px solid #AAA;
+	border-radius: 2px;
+	display: inline-block;
+	cursor: pointer;
+	box-shadow: 0 2px 2px rgba(0,0,0,0.3);
+}
+
+.file-item .filename {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	width: 100%;
+	height: 40px;
+	overflow: hidden;
+	background-color: rgba(0,0,0,0.7);
+	background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 100%);
+	color: white;
+	font-size: 14px;
+}
+
+.file-item .filename a {
+	position: absolute;
+	bottom: 0;
+	color: white;
+	height: 20px;
+	overflow: hidden;
+	margin-left: 4px;
+}
+
+.file-row-item {
+	cursor: pointer;
+	padding: 0.2em;
+	padding-left: 10px;
+	border-radius: 2px;
+	background-color: #FAFAFA;
+}
+
+.file-row-item:hover {
+	background-color: #EEE;
+}
+
+.file-row-item .filename {
+	font-size: 1.5em;
+	display: inline-block;
+	width: 60%;
+}
+
+.file-row-item .buttons {
+	opacity: 0.1;
+	width: 30%;
+	text-align: right;
+}
+
+.file-row-item:hover .buttons {
+	opacity: 1;
+}
+
+.tools {
+	padding: 10px 0;
+}
+
+textarea {
+	min-height: 300px;
+}
+
+.hidden-template {
+	display: none;
+}
+
+.account-wall
+{
+    margin-top: 20px;
+    padding: 20px 0px;
+    background-color: #f7f7f7;
+    -moz-box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.3);
+    -webkit-box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.3);
+}
+
+.modal-wrap {
+	width: 90%;
+	margin: auto;
+}
+
+.quota {
+	display: inline-block;
+	width: 300px;
+	height: 2em;
+	line-height: 2em;
+	margin-left: 20px;
+	margin-top: 0.8em;
+	background-color: #333;
+}
+
+.quota .progress-bar {
+	min-width: 100px;
+}
+
+.quota .size {
+	text-align: left;
+	font-size: 1.5em;
+	line-height: 1.5em;
+}
+
+.units-list {
+	border-radius: 2px;
+	width: 100%;
+	min-height: 80px;
+	margin: 10px 0;
+	padding: 0px;
+}
+
+.units-list .title {
+	padding-right: 20px;
+}
+
+.units-list .content {
+}
+
+.units-list .content button {
+	vertical-align: top;
+}
+
+.units-list .title {
+	display: inline-block;
+	font-size: 2.4em;
+}
+
+.unit-item {
+	position: relative;
+	margin-right: 10px;
+	margin-top: 4px;
+	margin-bottom: 0px;
+	transition: all 0.2s;
+	color: #666;
+}
+
+.unit-item.selected {
+	background-color: #EEE !important;
+	border-bottom: 4px solid #DDD;
+	margin-top: 0;
+	color: #000;
+}
+
+.unit-item .unit-size {
+	position: absolute;
+	bottom: 4px;
+	left: 8px;
+	background-color: #888;
+	border-radius: 2px;
+	width: calc( 100% - 16px );
+	height: 4px;
+	overflow: hidden;
+	opacity: 0.5;
+}
+
+.unit-item.selected .unit-size {
+	opacity: 1;
+}
+
+.unit-item .unit-size span {
+	float: left;
+	width: 0%;
+	height: 100%;
+	border-radius: 0px;
+	background-color: #6E9;
+	transition: all 0.5s;
+}
+
+.unit-item .unit-size span.danger {
+	background-color: #E96;
+}
+
+.unit-item.selected .glyphicon {
+	color: #5F9;
+}
+
+
+#setup-unit-dialog .users {
+	height: 400px;
+	overflow: auto;
+}
+
+.user-item {
+	font-size: 1.4em;
+	width: 94%;
+	margin: 10px;
+	padding: 10px;
+	background-color: #EEE;
+	border-radius: 4px;
+}
+
+.photo-button {
+	position: relative;
+}
+
+.hidden-file-input {
+	cursor: pointer;
+	opacity: 0;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 40px;
+	height: 40px;
+}

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="shortcut icon" href="assets/ico/favicon.ico">
+
+    <title>LiteFileServer</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/bootstrap-callouts.css" rel="stylesheet">
+
+    <!-- Custom styles for this template -->
+    <link href="css/style.css" rel="stylesheet">
+	<link href="js/extra/ladda.min.css" rel="stylesheet" >
+
+    <!-- Just for debugging purposes. Don't actually copy this line! -->
+    <!--[if lt IE 9]><script src="../../assets/js/ie8-responsive-file-warning.js"></script><![endif]-->
+
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+      <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+
+
+<div class="center-block startup-dialog" style="display:none">
+       <h2 class="form-signin-heading">Checking LFSystem</h2>
+       <h3 class="form-signin-heading">Please wait</h3>
+		<div class="progress">
+		  <div class="progress-bar progress-bar-striped active" role="progressbar" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100" style="width: 100%">
+			<span class="sr-only"></span>
+		  </div>
+		</div>
+</div>
+
+<div class="center-block warning-dialog" style="display:none">
+	<div class="col-md-9">
+		<div class="bs-callout bs-callout-danger" id="callout-glyphicons-empty-only">
+			<h4>Warning</h4>
+			<p class='content'></p>
+		</div>
+	</div>
+</div>
+
+<div id="login-dialog" class="center-block login-dialog" style="display:none">
+       <h2 class="form-signin-heading">LiteFileServer</h2>
+      <form class="form-signin">
+        <h3 class="form-signin-heading">Please sign in</h3>
+        <label for="inputEmail" class="sr-only">Email address or Username</label>
+        <input name="username" type="text" id="inputEmail" class="form-control" placeholder="Email address" value="guest" required autofocus>
+        <label for="inputPassword" class="sr-only">Password</label>
+        <input name="password" type="password" id="inputPassword" class="form-control" placeholder="Password" value="guest" required>
+        <div class="checkbox">
+          <label>
+            <input name="rememberme" type="checkbox" value="remember-me"> Remember me
+          </label>
+        </div>
+        <button class="submit-button btn btn-lg btn-primary btn-block ladda-button" data-style="slide-up" data-color="green" type="submit"><span class="ladda-label">Sign in</span></button>
+		<a href="#" class="text-center new-account" data-dismiss="modal" data-toggle="modal" data-target="#signup-dialog">Create an account </a>
+      </form>
+</div>
+
+
+
+
+<div class="center-block dashboard" style="display:none">
+
+    <nav class="navbar navbar-inverse navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="#">LiteFileServer Dashboard</a>
+        </div>
+        <div id="navbar" class="collapse navbar-collapse">
+		  <!--
+          <ul class="nav navbar-nav">
+            <li class="active"><a href="#">Home</a></li>
+            <li><a href="#contact">Contact</a></li>
+          </ul>
+		  -->
+          <ul class="nav navbar-nav navbar-right">
+			<li>
+				<div class='quota'>
+				  <div class="progress-bar" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 0%;">
+					<span class="size">Quota</span>
+				  </div>
+				</div>
+			</li>
+            <!--<li><a href="">Profile</a></li>-->
+            <li class="logout-button"><a href="">Logout <span class="glyphicon glyphicon-off" aria-hidden="true"></span></a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+
+	<div class="container">
+      <div class="">
+		<div class='units-list'>
+			<span class='title visible-md-inline visible-lg-inline'>Units</span>
+			<span class="content"></span>
+
+			<span class="visible-md-inline visible-lg-inline">
+				<button title="create unit" class="create-unit-button btn"><span class="glyphicon glyphicon-hdd" aria-hidden="true"></span> <span class="glyphicon glyphicon-plus" aria-hidden="true"></span></button>
+				<button title="share unit" class="share-unit-button btn"><span class="glyphicon glyphicon-user" aria-hidden="true"></span> <span class="glyphicon glyphicon-plus" aria-hidden="true"></span></button>
+				<button title="refresh units" class="refresh-units-button btn"><span class="glyphicon glyphicon-refresh" aria-hidden="true"></span></button>
+				<button title="setup units" class="setup-unit-button btn btn-primary" data-dismiss="modal" data-toggle="modal" data-target="#setup-unit-dialog"><span class="glyphicon glyphicon-cog" aria-hidden="true"></span></button>
+			</span>
+		</div>
+        <h1>Files Manager</h1>
+
+		<div class="row">
+		<div class='folders col-md-6'>
+
+			<div class="tools">
+				<button title="create folder" class="create-folder-button btn btn-primary"><span class="glyphicon glyphicon-folder-close" aria-hidden="true"></span> New Folder</button>
+				<button title="delete folder" class="delete-folder-button btn btn-danger"><span class="glyphicon glyphicon-trash" aria-hidden="true"></span></button>
+			</div>
+
+			<div class="folders-table">
+
+				<div class="header">
+					<h3>Folders</h3>
+				</div>
+				<div class='content'>
+				</div>
+			</div>
+		</div>
+		<div class='files col-md-6'>
+
+			<div class="tools">
+				<button title="create file" data-toggle="modal" data-target="#newfile-dialog" class="create-file-button btn btn-primary"><span class="glyphicon glyphicon-folder-close" aria-hidden="true"></span> Create File</button>
+
+				<button title="view thumbnails" data-view="thumbnails" class="changeview-files-button btn"><span class="glyphicon glyphicon-th-large" aria-hidden="true"></span></button>
+				<button title="view list" data-view="list" class="changeview-files-button btn"><span class="glyphicon glyphicon-th-list" aria-hidden="true"></span></button>
+				<button title="take photo" class="photo-button btn"><span class="glyphicon glyphicon-camera" aria-hidden="true"></span><input type="file" id="take-picture" accept="image/*" class="hidden-file-input"/></button>
+				
+			</div>
+
+			<div class="files-table">
+				<div class="header visible-md-block visible-lg-block">
+					Drag Files here
+				</div>
+				<div class="pull-left"></div> 
+
+				<div class='content'>
+				</div>
+
+				<div class="hidden-template">
+					<div id='file-item-template' class="file-item" draggable="true">
+						<span class="filename"><a href=''></a></span>
+					</div>
+
+					<div id='file-row-template' class="file-row-item" draggable="true">
+						<span class="filename"><a href=''></a></span><span class="buttons">
+							<button title="Rename file" class="btn renamefile-button"><span class="glyphicon glyphicon-font" aria-hidden="true"></span></button>
+							<button title="Edit file" class="btn editfile-button"><span class="glyphicon glyphicon-pencil" aria-hidden="true"></span></button>
+							<button title="Thumb" class="btn thumbfile-button"><span class="glyphicon glyphicon-picture" aria-hidden="true"></span></button>
+							<button title="Delete file" class="btn btn-danger deletefile-button"><span class="glyphicon glyphicon-trash" aria-hidden="true"></span></button>
+						</span>
+					</div>
+				</div>
+  		</div>
+
+	   </div>		
+	   </div>		
+      </div>		
+	</div>
+
+	<div class="footer-info container">
+		
+		<div class="hidden-template">
+			<div class="upload-progress progress template">
+			  <div class="progress-bar" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 0%;">
+				<span class="filename"></span>
+			  </div>
+			</div>
+		</div>
+	</div>
+
+
+<div id="newfile-dialog" class="modal fade">
+   <div class="modal-dialog">
+    <div class="modal-content">
+      <form class="form-newfile">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+       <h2 class="form-signin-heading">New file</h2>
+      </div>
+      <div class="modal-body">
+        <label for="inputFilename" class="sr-only">Filename</label>
+        <input name="filename" type="text" id="inputFilename" class="form-control" placeholder="test.txt" value="test.txt" required autofocus>
+        <label for="inputContent" class="sr-only">Content</label>
+        <textarea name="filecontent" id="inputContent" class="form-control" placeholder="some data...">test from web</textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="submit-button btn btn-lg btn-primary btn-block ladda-button" data-style="slide-up" data-color="green" type="submit"><span class="ladda-label">Create</span></button>
+      </div>
+      </form>
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+<div id="setup-unit-dialog" class="modal fade">
+   <div class="modal-dialog">
+    <div class="modal-content">
+      <form class="form-newfile">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+       <h2 class="form-signin-heading">Configure Unit</h2>
+      </div>
+      <div class="modal-body">
+        <label class="sr-only">Name</label>
+        <input name="unitname" type="text" class="inputName form-control" placeholder="unit name" value="" required autofocus>
+        <label class="sr-only">Users</label>
+		<div class="users">
+		</div>
+      </div>
+      <div class="modal-footer">
+        <button class="submit-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete</span></button>
+        <button class="submit-button btn btn-lg btn-primary ladda-button" data-style="slide-up" data-color="green" type="submit"><span class="ladda-label">Save</span></button>
+      </div>
+      </form>
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+<div id="fileinfo-dialog" class="modal fade">
+   <div class="modal-dialog">
+    <div class="modal-content">
+      <form class="form-newfile">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+       <h2 class="form-signin-heading">File</h2>
+      </div>
+      <div class="modal-body">
+        <label class="sr-only">Name</label>
+        <input name="filename" type="text" class="inputName form-control" placeholder="file name" value="" required autofocus>
+		<button title="save file name" class="save-filename-button btn btn-primary"><span class="glyphicon glyphicon-folder-close" aria-hidden="true"></span> New Folder</button>
+		<div class="preview">
+		</div>
+      </div>
+      <div class="modal-footer">
+        <button class="submit-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete</span></button>
+        <button class="submit-button btn btn-lg btn-primary ladda-button" data-style="slide-up" data-color="green" type="submit"><span class="ladda-label">Save</span></button>
+      </div>
+      </form>
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+
+</div> <!-- /.dashboard -->
+
+
+
+<div id="signup-dialog" class="modal fade" style="display: none">
+	<div class="row">
+		<div class="col-sm-6 col-md-4 col-md-offset-4" style="width: 500px">
+			<div class="account-wall">
+				<div class="modal-wrap">
+					<h1 class="text-center login-title">Create an account</h1>
+					<form class="form-signup">
+						<div class="form-group">
+							<label for="username-field">Username</label>
+							<input type="text" name="username" class="form-control username-field" placeholder="Your username" required autofocus>
+						</div>
+						<div class="form-group">
+							<label for="password-field">Password</label>
+						<input type="password" name="password" class="form-control password-field" placeholder="Password">
+						</div>
+						<div class="form-group">
+							<label for="mail-field">Mail</label>
+							<input type="text" name="email" class="form-control mail-field" placeholder="your@email.com" required>
+						</div>
+
+						<button class="btn btn-lg btn-primary btn-block submit-button ladda-button" type="submit" data-style="expand-right" data-color="green"><span class="ladda-label">Create</span></button>
+						<a href="#" class="pull-right need-help" type="button" data-dismiss="modal">Cancel </a><span class="clearfix"></span>
+					</form>
+					<div class="alert alert-danger" style="width:90%; margin: 0 auto; display: none"></div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+
+
+
+
+    <!-- Bootstrap core JavaScript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="https://code.jquery.com/jquery-1.10.2.min.js"></script>
+    <script src="js/extra/bootstrap.min.js"></script>
+    <script src="js/extra/bootbox.min.js"></script>
+	<script src="js/extra/spin.min.js"></script>
+	<script src="js/extra/ladda.min.js"></script>
+	<script src="litefileserver.js"></script>
+
+    <script src="js/code.js"></script>
+  </body>
+</html>
