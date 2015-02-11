@@ -6,13 +6,13 @@ class FilesModule
 	//********************************************
 	private static $USER_UNIT_SALT = "this is my unit"; //salt used for the name of the new units (avoid people guessing unit names)
 	private static $MAX_UNITS_PER_USER = 5; 
+	private static $MAX_USERS_PER_UNIT = 10;
 	private static $DEFAULT_UNIT_SIZE = 1000000;
-	private static $MIN_UNIT_SIZE = 50000;
-	private static $MAX_UNIT_SIZE = 100000000;
+	private static $MIN_UNIT_SIZE = 50000; //in bytes
+	private static $MAX_UNIT_SIZE = 100000000; //in bytes
 	private static $PREVIEW_IMAGE_SIZE = 128; //in pixels
 	private static $MAX_PREVIEW_FILE_SIZE = 50000;//in bytes
 	private static $RESTART_CODE = "doomsday"; //internal module restart password
-
 
 	//this is used to store the result of any call
 	public $result = null;
@@ -36,8 +36,10 @@ class FilesModule
 		{
 			case "createUnit": $this->actionCreateUnit(); break; //create a new unit
 			case "getUnits": $this->actionGetUnits(); break; //get files inside one folder
-			case "shareUnit": $this->actionShareUnit(); break; //create a new unit
+			case "inviteUserToUnit": $this->actionInviteUserToUnit(); break; //create a new unit
+			case "removeUserFromUnit": $this->actionRemoveUserFromUnit(); break; //create a new unit
 			case "getUnitInfo": $this->actionGetUnitInfo(); break; //get info about all the users in a unit
+			case "setUnitInfo": $this->actionSetUnitInfo(); break; //get info about all the users in a unit
 			case "deleteUnit": $this->actionDeleteUnit(); break; //create a new unit
 			case "getFolders":	$this->actionGetFolders(); break; //get folders tree
 			case "createFolder": $this->actionCreateFolder(); break; //create a folder
@@ -145,7 +147,7 @@ class FilesModule
 		return;
 	}
 
-	public function actionShareUnit()
+	public function actionInviteUserToUnit()
 	{
 		$user = $this->getUserByToken();
 		if(!$user) //result already filled in getTokenUser
@@ -175,6 +177,15 @@ class FilesModule
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+		//check how many users does this unit have
+		$users = $this->getUnitUsers( $unit->id );
+		if( count($users) >= self::$MAX_USERS_PER_UNIT )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'too many users in this unit';
 			return;
 		}
 
@@ -227,13 +238,101 @@ class FilesModule
 		return true;
 	}
 
-	public function actionDeleteUnit()
+	public function actionRemoveUserFromUnit()
 	{
 		$user = $this->getUserByToken();
 		if(!$user) //result already filled in getTokenUser
 			return;
 
 		$mode = "READ";
+		$max_units = self::$MAX_UNITS_PER_USER;
+
+		if(!isset($_REQUEST["unit_name"]) || !isset($_REQUEST["username"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$unit_name = $_REQUEST["unit_name"];
+		if($unit_name == "")
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'wrong unit name';
+			return;
+		}
+
+		//get unit only if user has rights
+		$unit = $this->getUnitByName( $unit_name, $user->id );
+		if(!$unit)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+		//get other user
+		$usermodule = getModule("user");
+		$target_username = $_REQUEST["username"];
+		$target_user = null;
+		if( filter_var($target_username, FILTER_VALIDATE_EMAIL) )
+			$target_user = $usermodule->getUserByMail($target_username);
+		else
+			$target_user = $usermodule->getUserByName($target_username);
+
+		if(!$target_user)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'user not found';
+			return;
+		}
+
+		if($user->id == $target_user->id)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'cannot be removed from your own unit';
+			return;
+		}
+
+
+		//is already in unit
+		$units = $this->getUserUnits($target_user->id);
+		$found = false;
+		foreach($units as $i => $u)
+		{
+			if($u->name == $unit_name)
+			{
+				$found = true;
+				break;
+			}
+		}
+
+		if(!$found)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'user not belong to this unit';
+			return;
+		}
+
+
+		//add privileges
+		if( !$this->setPrivileges($unit->id, $target_user->id, null ) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'problem removing rights to unit';
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["msg"] = 'user removed';
+		return true;
+	}
+
+	public function actionDeleteUnit()
+	{
+		$user = $this->getUserByToken();
+		if(!$user) //result already filled in getTokenUser
+			return;
 
 		if(!isset($_REQUEST["unit_name"]) )
 		{
@@ -266,8 +365,29 @@ class FilesModule
 			return;
 		}
 
-		//TODO
-		//$this->deleteUnit( $unit->id );
+		/* min units
+		$units = $this->getUserUnits($user->id);
+		if(count($units) == 1)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'problem deleting unit';
+			return;
+		}
+		*/
+
+		if( !$this->deleteUnit( $unit->id, true ))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'problem deleting unit';
+			return;
+		}
+
+		$user->used_space -= $unit->total_size;
+
+		$this->result["status"] = 1;
+		$this->result["msg"] = 'unit deleted';
+		$this->result["user"] = $user;
+		return;
 	}
 
 	public function actionGetUnitInfo()
@@ -309,6 +429,109 @@ class FilesModule
 		$this->result["unit"] = $unit;
 		$this->result["users"] = $users;
 	}
+
+	public function actionSetUnitInfo()
+	{
+		$user = $this->getUserByToken();
+		if(!$user) //result already filled in getTokenUser
+			return;
+
+		if(!isset($_REQUEST["unit_name"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$unit_name = $_REQUEST["unit_name"];
+		if($unit_name == "")
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'wrong unit name';
+			return;
+		}
+
+		//get unit only if user has rights
+		$unit = $this->getUnitByName( $unit_name, $user->id );
+		if(!$unit)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+		$total_size = -1;
+		
+		if(isset($_REQUEST["total_size"]))
+			$total_size = intval($_REQUEST["total_size"]);
+
+		debug("totalsize: " . $total_size );
+		if($total_size != -1 && $total_size != $unit->total_size)
+		{
+			if ($total_size < self::$MIN_UNIT_SIZE || $total_size > self::$MAX_UNIT_SIZE)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'invalid size';
+				return;
+			}
+
+
+			if ($total_size < $unit->used_size)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'cannot resize below content size, remove files';
+				return;
+			}
+
+			//change in total size
+			$diff = $total_size - $unit->total_size;
+
+			if($user->used_space + $diff > $user->total_space)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'user doesnst have enough space available';
+				return;
+			}
+			
+			//reduce user free space
+			$usermodule = getModule("user");
+			if( !$usermodule->changeUserUsedSpace( $user->id, $diff, true) )
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'problem changing user used space';
+				return;
+			}
+			debug("user used space changed");
+
+			if( !$this->changeUnitTotalSize($unit->id, $total_size) )
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'problem changing unit size';
+				return;
+			}
+			debug("unit total size changed");
+
+			$unit->total_size += $diff;
+			$user->used_space += $diff;
+		}
+
+		if(isset($_REQUEST["metadata"]))
+		{
+			if($this->setUnitMetadata( $unit->id, $_REQUEST["metadata"] ))
+			{
+				$unit->metadata = $_REQUEST["metadata"];
+				debug("unit metadata changed");
+			}
+			else
+				debug("problem changing unit metadata");
+		}
+		
+		$this->result["status"] = 1;
+		$this->result["msg"] = 'unit info changed';
+		$this->result["unit"] = $unit;
+		$this->result["user"] = $user;
+	}
+
 
 	public function actionGetFolders()
 	{
@@ -678,6 +901,7 @@ class FilesModule
 		$folder = $dirname . "/" . $path_info["basename"];
 		if( substr($folder, 0, 2) == "./" )
 			$folder = substr($folder, 2);
+		$filename = $_REQUEST["filename"];
 
 		//check space stuff
 		$bytes = strlen( $data );
@@ -697,7 +921,7 @@ class FilesModule
 		}
 
 		//store file
-		$file_id = $this->storeFile( $user->id, $unit->id, $folder, $_REQUEST["filename"], $data, $_REQUEST["category"], $metadata );
+		$file_id = $this->storeFile( $user->id, $unit->id, $folder, $filename, $data, $_REQUEST["category"], $metadata );
 		if($file_id == null)
 		{
 			$this->result["status"] = -1;
@@ -879,7 +1103,7 @@ class FilesModule
 			$target_unit->used_size += $filesize;
 		}
 
-		//in case it has
+		//in case it has preview
 		$this->renamePreview( $fullpath, $target_fullpath );
 
 		$this->result["status"] = 1;
@@ -1178,8 +1402,14 @@ class FilesModule
 		$info = new stdClass();
 		$info->unit = array_shift($t);
 		if(!$is_folder)
-			$info->filename = array_pop($t);
-		$info->folder = implode( "/", $t );
+			$info->filename = $this->clearPathName( array_pop($t) );
+		$info->folder = $this->clearPathName( implode( "/", $t ) );
+		$info->fullpath = $unit->unit . "/" . $info->folder;
+		if(!$is_folder)
+			$info->fullpath .= "/" . $info->filename;
+		if($info->folder == "")
+			$info->folder = "/";
+		$info->fullpath = $this->clearPathName( $info->fullpath );
 		return $info;
 	}
 
@@ -1234,6 +1464,7 @@ class FilesModule
 
 		//create folder
 		$this->createFolder( $unit_name );
+		$this->createFolder( $unit_name . "/" . PICS_PATH );
 
 		//give privileges to user
 		if( !$this->setPrivileges( $unit_id, $user_id, "ADMIN" ) )
@@ -1245,12 +1476,87 @@ class FilesModule
 		if($change_user_quota)
 			getModule("user")->changeUserUsedSpace( $user_id, $size, true );
 
-		$unit = new stdClass();
-		$unit->id = $unit_id;
-		$unit->name = $unit_name;
-		$unit->used_size = 0;
-		$unit->total_size = $size;
+		$unit = $this->getUnit($unit_id);
 		return $unit;
+	}
+
+	public function deleteUnit($id, $change_user_quota = false)
+	{
+		global $database;
+		$id = intval($id);
+
+		$unit = $this->getUnit( $id );
+		if(!$unit)
+		{
+			debug("Unit with wrong id");
+			return false;
+		}
+
+		//delete from units DB
+		$query = "DELETE FROM `".DB_PREFIX."units` WHERE `id` = " . $id . " LIMIT 1";
+		$database = getSQLDB();
+		$result = $database->query( $query );
+		if(!$result)
+		{
+			debug("error deleting");
+			return false;
+		}
+		if($database->affected_rows == 0)
+		{
+			debug("weird deleting");
+			return false;
+		}
+
+		//delete files from DB
+		$query = "DELETE FROM `".DB_PREFIX."files` WHERE `unit_id` = " . $id;
+		$database = getSQLDB();
+		$result = $database->query( $query );
+		if(!$result)
+		{
+			debug("error deleting");
+			return false;
+		}
+
+		//delete files from HD
+		$this->delTree( $unit->name );
+
+		//delete from privileges
+		$query = "DELETE FROM `".DB_PREFIX."privileges` WHERE `unit_id` = ".$id;
+		$result = $database->query( $query );
+
+		//delete comments
+		//TODO
+
+		//change user quota
+		if( $change_user_quota )
+		{
+			$usermodule = getModule("user");
+			if( !$usermodule->changeUserUsedSpace( $unit->author_id, -$unit->total_size, true) )
+			{
+				debug('problem changing user used space');
+				return false;
+			}
+			debug("user used space changed");
+		}
+
+		return true;
+	}
+
+	public function setUnitMetadata($id, $data)
+	{
+		global $database;
+
+		$id = intval($id);
+		$data = addslashes($data);
+
+		$database = getSQLDB();
+		$query = "UPDATE `".DB_PREFIX."units` SET `metadata` = '".$data."' WHERE `id` = ".$id.";";
+		$result = $database->query( $query );
+		if(!$result)
+			return false;
+		if($database->affected_rows == 0)
+			return false;
+		return true;
 	}
 
 	//is delta means if the $size number is the result size or you want to add it to the current size
@@ -1278,18 +1584,18 @@ class FilesModule
 		return true;
 	}
 
-	public function changeUnitTotalSize($id, $size)
+	public function changeUnitTotalSize($id, $total_size)
 	{
 		global $database;
 
-		if(!is_numeric($size))
+		if(!is_numeric($total_size))
 			return false;
 
 		$id = intval($id);
-		$size = intval($size);
+		$total_size = intval($total_size);
 
 		$database = getSQLDB();
-		$query = "UPDATE `".DB_PREFIX."units` SET `total_size` = ".intval($size)." WHERE `id` = '".$id."';";
+		$query = "UPDATE `".DB_PREFIX."units` SET `total_size` = ".intval($total_size)." WHERE `id` = ".$id.";";
 
 		$result = $database->query( $query );
 		if($database->affected_rows == 0)
@@ -1347,6 +1653,19 @@ class FilesModule
 		return true;
 	}
 
+	//clean
+	public function processUnit( $unit ) 
+	{
+		if(!$unit)
+			return null;
+		$unit->id = intval($unit->id);
+		$unit->author_id = intval($unit->author_id);
+		$unit->total_size = intval($unit->total_size);
+		$unit->used_size = intval($unit->used_size);
+		$unit->metadata = stripslashes( $unit->metadata );
+		return $unit;
+	}
+
 	public function getUserUnits( $user_id )
 	{
 		//check privileges
@@ -1355,7 +1674,7 @@ class FilesModule
 		$result = $database->query( $query );
 		$units = Array();
 		while($unit = $result->fetch_object())
-			$units[] = $unit;
+			$units[] = $this->processUnit($unit);
 		return $units;
 	}
 
@@ -1373,26 +1692,30 @@ class FilesModule
 		$result = $database->query( $query );
 		if(!$result)
 			return null;
-		return $result->fetch_object();
+
+		return $this->processUnit( $result->fetch_object() );
 	}
 
 	public function getUnitByName( $name, $user_id = -1 )
 	{
 		$database = getSQLDB();
+		$user_id = intval($user_id);
 		$name = addslashes($name);
 
 		//check privileges
 		if($user_id != -1)
 		{
-			$query = "SELECT units.*, privileges.mode FROM `".DB_PREFIX."units` AS units, `".DB_PREFIX."privileges` as privileges WHERE units.name = '" . $name . "' AND units.id = privileges.unit_id AND privileges.user_id = " . intval($user_id);
+			$query = "SELECT units.*, privileges.mode, users.username AS author FROM `".DB_PREFIX."units` AS units, `".DB_PREFIX."users` AS users, `".DB_PREFIX."privileges` as privileges WHERE units.name = '" . $name . "' AND units.id = privileges.unit_id AND privileges.user_id = " . $user_id . " AND units.author_id = users.id";
 		}
 		else
-			$query = "SELECT * FROM `".DB_PREFIX."units` WHERE `name` = '" . $name . "'";
+			$query = "SELECT units.*, users.username AS author FROM `".DB_PREFIX."units` AS units, `".DB_PREFIX."users` AS users WHERE `name` = '" . $name . "' AND units.author_id = users.id";
 
 		$result = $database->query( $query );
 		if(!$result)
 			return null;
-		return $result->fetch_object();
+
+		$unit = $this->processUnit( $result->fetch_object() );
+		return $unit;
 	}
 
 	public function getUnitUsers( $unit_id )
@@ -1416,10 +1739,10 @@ class FilesModule
 	{
 		$user_id = intval($user_id);
 		$unit_id = intval($unit_id);
-		$filename = addslashes($filename);
+		$filename = addslashes( trim($filename) );
 		if ( strlen($folder) > 0 && $folder[0] == "/" ) 
 			$folder = substr($folder, 1);
-		$folder = addslashes($folder);
+		$folder = addslashes( trim($folder) );
 		$category = addslashes($category);
 		$metadata = addslashes($metadata);
 
@@ -1437,6 +1760,12 @@ class FilesModule
 			$this->last_error = "Extension not allowed: " . $filename;
 			return null;
 		}
+
+		//clear
+		if($folder == "/")
+			$folder = "";
+		$folder = $this->clearPathName( $folder );
+		$filename = $this->clearPathName( $filename );
 
 		//unit
 		$unit = $this->getUnit( $unit_id ); // $user_id)
@@ -1561,15 +1890,15 @@ class FilesModule
 		$fileData = substr($fileData, strpos($fileData, ",")+1); //remove encoding info data
 		$fileData = base64_decode($fileData);
 
-		$picspath = self::getPicsFolderName();
-		$tn_filename = base64_encode( $file_info->fullpath ) . ".jpg";
-		$tn_path = $picspath . "/" . $tn_filename ;
+		$tn_filename = base64_encode( $file_info->folder . "/" . $file_info->filename ) . ".jpg";
+		$tn_path = $file_info->unit_name . "/".PICS_PATH."/" . $tn_filename ;
 
-		$size = file_put_contents( $tn_path , $fileData );
-		if($size == 0)
+		if( !self::writeFile( $tn_path, $fileData ) )
+		{
+			debug("problem writing file");
 			return false;
+		}
 
-		chmod( $tn_path, 0775);
 		return true;
 	}
 
@@ -1582,7 +1911,7 @@ class FilesModule
 
 		//direct path
 		$realpath = self::getFilesFolderName() . "/" . $file_info->fullpath;
-		$info = pathinfo( $realpath );
+		$info = pathinfo( $realpath ); //to extract extension
 
 		$thumbWidth =  self::$PREVIEW_IMAGE_SIZE;
 
@@ -1621,10 +1950,10 @@ class FilesModule
 		// copy and resize old image into new image 
 		imagecopyresized( $tmp_img, $img, 0, 0, 0, 0, $new_width, $new_height, $width, $height );
 
-		$picspath = self::getPicsFolderName();
-		$tn_filename = base64_encode( $file_info->fullpath ) . ".jpg";
-		debug("PICPATH: " . $file_info->fullpath . " -> " . $tn_filename );
-		$tn_path = $picspath . "/" . $tn_filename ;
+		$picspath = $file_info->unit_name . "/" . PICS_PATH;
+		$tn_filename = base64_encode( $file_info->folder . "/" . $file_info->filename ) . ".jpg";
+
+		$tn_path = $this->getFilesFolderName() . "/" . $picspath . "/" . $tn_filename ;
 
 		// save thumbnail into a file
 		if( !imagejpeg( $tmp_img, $tn_path ) )
@@ -1640,34 +1969,39 @@ class FilesModule
 		if($old_fullpath == $new_fullpath)
 			return true;
 
-		$picspath = self::getPicsFolderName() . "/";
+		$old_path_info = $this->parsePath( $old_fullpath );
+		$new_path_info = $this->parsePath( $new_fullpath );
 
-		$old_filename = base64_encode( $old_fullpath ) . ".jpg";
-		$new_filename = base64_encode( $new_fullpath ) . ".jpg";
+		$old_filename = base64_encode( $old_path_info->folder . "/" . $old_path_info->filename  ) . ".jpg";
+		$new_filename = base64_encode( $new_path_info->folder . "/" . $new_path_info->filename  ) . ".jpg";
 
 		//no thumbnail
-		if( !is_file($picspath . $old_filename ) )
+		if(!self::fileExist( $old_path_info->unit . "/".PICS_PATH."/" . $old_filename ) )
+		{
+			//debug( "'" . $old_path_info->folder . "''" . $old_path_info->filename ."'");
+			//debug("no preview found: " . $old_filename);
 			return false;
+		}
 
-		$result = rename( $picspath . $old_filename, $picspath . $new_filename );
+		$result = self::moveFile( $old_path_info->unit . "/".PICS_PATH."/" . $old_filename, $new_path_info->unit . "/".PICS_PATH."/" . $new_filename );
 		if(!$result)
-			debug("Problem moving preview: " . $picspath . $new_filename );
+			debug("Problem moving preview");
 		return $result;
 	}
 
 	public function deletePreview($fullpath)
 	{
-		$picspath = self::getPicsFolderName() . "/";
+		$path_info = $this->parsePath( $fullpath, true );
 
-		$filename = base64_encode( $fullpath ) . ".jpg";
+		$filename = base64_encode( $path_info->fullpath ) . ".jpg";
 
 		//no thumbnail
-		if( !is_file($picspath . $filename ) )
+		if(!$this->fileExist( $path_info->unit . "/".PICS_PATH."/" . $filename ) )
 			return false;
 
-		$result = unlink( $picspath . $filename );
+		$result = self::deleteFile( $path_info->unit . "/".PICS_PATH."/" . $filename );
 		if(!$result)
-			debug("Problem deleting preview: " . $picspath . $filename );
+			debug("Problem deleting preview: " .  $path_info->unit . "/".PICS_PATH."/" . $filename );
 		return $result;
 	}
 
@@ -1809,14 +2143,6 @@ class FilesModule
 			return false;
 		}
 
-		/* previews do not move
-		$oldfilepath = $file_info->folder . "_pics/_" . $file_info->id . ".png";
-		$newfilepath = $new_folder . "/_pics/_" . $file_info->id . ".png";
-		if(!self::folderExist($new_folder . "/_pics/"))
-			self::createFolder($new_folder . "/_pics/");
-		if( !self::moveFile($oldfilepath,$newfilepath) )	
-			$this->last_error = "Problem moving preview";
-		*/
 		return true;
 	}
 
@@ -1970,10 +2296,6 @@ class FilesModule
 		//create folders
 		$this->createFolder("");
 
-		//pics
-		mkdir( self::getPicsFolderName() );  
-		chmod( self::getPicsFolderName(), 0775);
-
 		debug("Files folder created");
 	}
 
@@ -1985,17 +2307,14 @@ class FilesModule
 		return __DIR__ . "/../../" . FILES_PATH;
 	}
 
-	public static function getPicsFolderName() 
-	{
-		//jump back from includes/modules/
-		return __DIR__ . "/../../" . PICS_PATH;
-	}
-
 	public function getFolders( $unit_name )
 	{
 		$folder = self::getFilesFolderName() . "/" . $unit_name . "/";
 		//debug($folder);
-		return $this->getSubfolders( $folder );
+		$folders = $this->getSubfolders( $folder );
+
+		unset($folders[ PICS_PATH ]);
+		return $folders;
 	}
 
 	//recursive search

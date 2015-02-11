@@ -160,8 +160,8 @@ class UsersModule
 
 		if(!ALLOW_WEB_REGISTRATION)
 		{
-			if(isset($_REQUEST["username"]))
-				$user = $this->getUserByToken();
+			if(isset($_REQUEST["admin_token"]))
+				$user = $this->getUserByToken( $_REQUEST["admin_token"] );
 			if(!$user || !$user->roles["admin"])
 			{
 				$this->result["status"] = -1;
@@ -657,6 +657,8 @@ class UsersModule
 			$query = "UPDATE `".DB_PREFIX."users` SET `used_space` = ".intval($size)." WHERE `id` = '".$id."';";
 
 		$result = $database->query( $query );
+		if(!$result)
+			return false;
 		if($database->affected_rows == 0)
 			return false;
 		return true;

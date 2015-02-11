@@ -4,7 +4,7 @@ var LiteFileServer = {
 	version: "0.1a",
 	url: "./server.php",
 	files_path: "./files/",
-	pics_path: "./pics/",
+	pics_path: "_pics",
 	previews: "local", //generate previews in local/server
 	generate_preview: true,
 	preview_size: 128,
@@ -90,10 +90,13 @@ var LiteFileServer = {
 		});
 	},
 
-	//create a new account if it is enabled
-	createAccount: function(user, password, email, on_complete)
+	//create a new account if it is enabled or if you are admin
+	createAccount: function(user, password, email, on_complete, on_error, admin_token)
 	{
-		this.request( this.url,{action: "user/create", username: user, password: password, email: email }, function(resp){
+		var params = {action: "user/create", username: user, password: password, email: email };
+		if(admin_token)
+			params.admin_token = admin_token;
+		return this.request( this.url,params, function(resp){
 			console.log(resp);
 			if(on_complete)
 				on_complete( resp.status == 1, resp );
@@ -146,7 +149,7 @@ var LiteFileServer = {
 		xhr.onload = function()
 		{
 			var response = this.response;
-			//console.log(response);
+			console.log(params.action);
 			if(this.status < 200 || this.status > 299)
 			{
 				if(on_error)
@@ -156,7 +159,16 @@ var LiteFileServer = {
 
 			var type = this.getResponseHeader('content-type');
 			if(type == "application/json")
-				response = JSON.parse(response);
+			{
+				try
+				{
+					response = JSON.parse(response);
+				}
+				catch (err)
+				{
+					console.error(err); 
+				}
+			}
 
 			if(on_complete)
 				on_complete(response);
@@ -165,6 +177,7 @@ var LiteFileServer = {
 
 		xhr.onerror = function(err)
 		{
+			console.error(err);
 			if(on_error)
 				on_error(err);
 		}
@@ -195,19 +208,32 @@ var LiteFileServer = {
 		var unit = t.shift();
 		var filename = "";
 		if(!is_folder)
-			filename = t.pop();
-		var folder = t.join("/");
+			filename = this.clearPath( t.pop() );
+		var folder = this.clearPath( t.join("/") );
+		if(folder == "")
+			folder = "/";
+
 		return {
 			unit: unit,
 			folder: folder,
 			filename: filename,
+			fullpath: fullpath,
 			getFullpath: function() { return this.unit + "/" + this.folder + "/" + this.filename }
 		};
 	},
 
 	getThumbPath: function(fullpath)
 	{
-		return this.pics_path + "/" + btoa( this.clearPath( fullpath ) ) + ".jpg";
+		var info = this.parsePath(fullpath);
+		var folder = info.folder;
+		if(folder == "/")
+			folder = "";
+		return this.files_path + "/" + info.unit + "/" + this.pics_path + "/" + btoa( folder + "/" + info.filename ) + ".jpg";
+	},
+
+	getSizeString: function( size )
+	{
+		return (size/(1024*1024)).toFixed(1) + " MBs";
 	},
 
 	requestFile: function(fullpath, on_complete, on_error)
@@ -220,6 +246,7 @@ var LiteFileServer = {
 function Session()
 {
 	this.onsessionexpired = null; //"token not valid"
+	this.units = {};
 }
 
 LiteFileServer.Session = Session;
@@ -284,40 +311,126 @@ Session.prototype.removeAccount = function(user_id, on_complete)
 //units
 Session.prototype.createUnit = function(unit_name, size, on_complete)
 {
+	var that = this;
 	return this.request( this.url,{action: "files/createUnit", unit_name: unit_name, size: size }, function(resp){
+		if(resp.unit)
+		{
+			Session.processUnit(resp.unit);
+			that.units[ resp.unit.name ] = resp.unit;
+		}
 		if(on_complete)
 			on_complete(resp.unit, resp);
 	});
 }
 
-Session.prototype.shareUnit = function(unit_name, username, on_complete)
+Session.prototype.deleteUnit = function(unit_name, on_complete)
 {
-	return this.request( this.url,{action: "files/shareUnit", unit_name: unit_name, username: username }, function(resp){
+	var that = this;
+	return this.request( this.url,{action: "files/deleteUnit", unit_name: unit_name }, function(resp){
+		if(resp.status == 1)
+			delete that.units[ unit_name ];
 		if(on_complete)
 			on_complete(resp.status == 1, resp);
 	});
 }
 
+Session.prototype.inviteUserToUnit = function(unit_name, username, on_complete)
+{
+	return this.request( this.url,{action: "files/inviteUserToUnit", unit_name: unit_name, username: username }, function(resp){
+		if(on_complete)
+			on_complete(resp.status == 1, resp);
+	});
+}
 
+Session.prototype.removeUserFromUnit = function(unit_name, username, on_complete)
+{
+	return this.request( this.url,{action: "files/removeUserFromUnit", unit_name: unit_name, username: username }, function(resp){
+		if(on_complete)
+			on_complete(resp.status == 1, resp);
+	});
+}
+
+//get size, and users
 Session.prototype.getUnitInfo = function(unit_name, on_complete)
 {
+	var that = this;
 	return this.request( this.url,{action: "files/getUnitInfo", unit_name: unit_name }, function(resp){
+		if(resp.unit)
+		{
+			Session.processUnit(resp.unit);
+			that.units[ resp.unit.name ] = resp.unit;
+		}
 		if(on_complete)
 			on_complete(resp.unit);
 	});
 }
 
+//allow to change metadata or size
+Session.prototype.setUnitInfo = function(unit_name, info, on_complete)
+{
+	var that = this;
+	var params = {action: "files/setUnitInfo", unit_name: unit_name };
+
+	if(info.metadata)
+	{
+		if( typeof(info.metadata) == "object")
+			info.metadata = JSON.stringify( info.metadata );
+		params.metadata = info.metadata;
+	}
+	if(info.total_size && typeof(info.total_size) == "number")
+		params.total_size = parseInt( info.total_size );
+	return this.request( this.url,params, function(resp){
+
+		if(resp.unit)
+		{
+			Session.processUnit(resp.unit);
+			that.units[ resp.unit.name ] = resp.unit;
+		}
+		if(on_complete)
+			on_complete(resp.status == 1, resp);
+	});
+}
+
+Session.prototype.setUnitMetadata = function(unit_name, metadata, on_complete)
+{
+	var that = this;
+	if( typeof(metadata) == "object")
+		metadata = JSON.stringify(metadata);
+	return this.request( this.url,{action: "files/setUnitInfo", unit_name: unit_name, info: metadata }, function(resp){
+		if(resp.unit)
+		{
+			Session.processUnit(resp.unit);
+			that.units[ resp.unit.name ] = resp.unit;
+		}
+		if(on_complete)
+			on_complete(resp.unit);
+	});
+}
+
+Session.processUnit = function( unit )
+{
+	if(!unit)
+		return unit;
+	unit.used_size = parseInt( unit.used_size );
+	unit.total_size = parseInt( unit.total_size );
+	if(unit.metadata)
+		unit.metadata = JSON.parse(unit.metadata);
+	else
+		unit.metadata = {};
+	return unit;
+}
+
 Session.prototype.getUnits = function(on_complete)
 {
+	var that = this;
 	return this.request( this.url,{action: "files/getUnits"}, function(resp){
 		if(resp.data)
 		{
 			for(var i in resp.data)
 			{
 				var unit = resp.data[i];
-				unit.used_size = parseInt( unit.used_size );
-				unit.total_size = parseInt( unit.total_size );
-				unit.metadata = JSON.parse(unit.metadata);
+				Session.processUnit(unit);
+				that.units[ unit.name ] = unit;
 			}
 		}
 

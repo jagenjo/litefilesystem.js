@@ -21,8 +21,8 @@ define('ALLOW_WEB_REGISTRATION', true ); //allow people to create users
 define('DEFAULT_USER_SPACE', 10 ); //in MBs
 define('VALIDATE_ACCOUNTS', false ); //force people to validate the account once created
 define('FILES_PATH','files/');  //folder where all the files will be stored
-define('PICS_PATH','pics/'); //folder where all the thumbnails will be stored
-define('VALID_EXTENSIONS','png,jpg,bmp,tga,dds,obj,bin,wbin,dae,fbx,mat,txt,json,js,jbin');
+define('PICS_PATH','_pics'); //folder where all the thumbnails will be stored
+define('VALID_EXTENSIONS','png,jpg,jpeg,bmp,txt,json,js,css,html,htm,ttf,otf');
 
 
 

@@ -246,13 +246,30 @@ textarea {
 	overflow: auto;
 }
 
-.user-item {
+#setup-unit-dialog .unitname {
+	opacity: 0.5;
+}
+
+.unit-user-item {
 	font-size: 1.4em;
 	width: 94%;
 	margin: 10px;
 	padding: 10px;
 	background-color: #EEE;
 	border-radius: 4px;
+}
+
+.unit-user-item .username {
+	display: inline-block;
+}
+
+.unit-user-item.admin-role {
+	background-color: #ED9;
+}
+
+.unit-user-item .dropdown {
+	float: right;
+	display: inline-block;
 }
 
 .photo-button {
@@ -268,3 +285,9 @@ textarea {
 	width: 40px;
 	height: 40px;
 }
+
+.template {
+	display: none;
+}
+
+.slider { width: 100% !important; }

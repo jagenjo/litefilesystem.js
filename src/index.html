@@ -6,17 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="">
     <meta name="author" content="">
-    <link rel="shortcut icon" href="assets/ico/favicon.ico">
+    <link rel="shortcut icon" href="assets/ico/favicon.ico" />
 
     <title>LiteFileServer</title>
 
     <!-- Bootstrap core CSS -->
-    <link href="css/bootstrap.min.css" rel="stylesheet">
-    <link href="css/bootstrap-callouts.css" rel="stylesheet">
+    <link href="css/bootstrap.min.css" rel="stylesheet" />
+    <link href="css/bootstrap-callouts.css" rel="stylesheet" />
 
     <!-- Custom styles for this template -->
-    <link href="css/style.css" rel="stylesheet">
-	<link href="js/extra/ladda.min.css" rel="stylesheet" >
+    <link href="css/style.css" rel="stylesheet" />
+	<link href="js/extra/ladda.min.css" rel="stylesheet" />
+	<link href="js/extra/bootstrap-slider.min.css" rel="stylesheet" />
 
     <!-- Just for debugging purposes. Don't actually copy this line! -->
     <!--[if lt IE 9]><script src="../../assets/js/ie8-responsive-file-warning.js"></script><![endif]-->
@@ -91,6 +92,7 @@
           </ul>
 		  -->
           <ul class="nav navbar-nav navbar-right">
+			<li class='admin-button'><a href="#" data-dismiss="modal" data-toggle="modal" data-target="#admin-dialog">Admin</a></li>
 			<li>
 				<div class='quota'>
 				  <div class="progress-bar" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 0%;">
@@ -112,8 +114,7 @@
 			<span class="content"></span>
 
 			<span class="visible-md-inline visible-lg-inline">
-				<button title="create unit" class="create-unit-button btn"><span class="glyphicon glyphicon-hdd" aria-hidden="true"></span> <span class="glyphicon glyphicon-plus" aria-hidden="true"></span></button>
-				<button title="share unit" class="share-unit-button btn"><span class="glyphicon glyphicon-user" aria-hidden="true"></span> <span class="glyphicon glyphicon-plus" aria-hidden="true"></span></button>
+				<button title="create unit" class="create-unit-button btn" data-dismiss="modal" data-toggle="modal" data-target="#new-unit-dialog"><span class="glyphicon glyphicon-hdd" aria-hidden="true"></span> <span class="glyphicon glyphicon-plus" aria-hidden="true"></span></button>
 				<button title="refresh units" class="refresh-units-button btn"><span class="glyphicon glyphicon-refresh" aria-hidden="true"></span></button>
 				<button title="setup units" class="setup-unit-button btn btn-primary" data-dismiss="modal" data-toggle="modal" data-target="#setup-unit-dialog"><span class="glyphicon glyphicon-cog" aria-hidden="true"></span></button>
 			</span>
@@ -221,15 +222,43 @@
        <h2 class="form-signin-heading">Configure Unit</h2>
       </div>
       <div class="modal-body">
-        <label class="sr-only">Name</label>
-        <input name="unitname" type="text" class="inputName form-control" placeholder="unit name" value="" required autofocus>
-        <label class="sr-only">Users</label>
+        <label>Name <span class='unitname'></span></label>
+		<input type="text" class="inputName form-control" placeholder="Unit name">
+
+		<!--
+		<div class="input-group">
+			  <input type="text" class="inputName form-control" placeholder="Unit name">
+			  <span class="input-group-btn">
+				<button class="save-unit-name-button btn btn-default btn-primary" type="button">Save</button>
+			  </span>
+		</div>
+		-->
+        <label>Size <span class='size-info'></span></label>
+		<div>
+			<input name="size" type="text" class="inputSize form-control" placeholder="2" value="" required autofocus />
+		</div>
+
+		<h3>Users with access</h3>
 		<div class="users">
+		</div>
+		<div class="unit-user-item template">
+			<span class='glyphicon glyphicon-user' aria-hidden='true'></span> <span class='username'></span> as <span class="role"></span>
+			<div class="dropdown">
+			  <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-expanded="true">
+				Actions
+				<span class="caret"></span>
+			  </button>
+			  <ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="dropdownMenu1">
+				<li role="presentation"><a role="menuitem" tabindex="-1" href="#">Change privileges</a></li>
+				<li role="presentation"><a class='remove-user-unit-button' role="menuitem" tabindex="-1" href="#">Remove</a></li>
+			  </ul>
+			</div>
 		</div>
       </div>
       <div class="modal-footer">
-        <button class="submit-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete</span></button>
-        <button class="submit-button btn btn-lg btn-primary ladda-button" data-style="slide-up" data-color="green" type="submit"><span class="ladda-label">Save</span></button>
+		<button title="Invite user" class="invite-user-button btn ladda-button"><span class="glyphicon glyphicon-user" aria-hidden="true"></span> <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>Invite</button>
+        <button class="delete-unit-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete</span></button>
+        <button class="save-unit-setup-button btn btn-lg btn-primary ladda-button" data-style="slide-up" data-color="green"><span class="ladda-label">Save</span></button>
       </div>
       </form>
     </div><!-- /.modal-content -->
@@ -245,7 +274,7 @@
        <h2 class="form-signin-heading">File</h2>
       </div>
       <div class="modal-body">
-        <label class="sr-only">Name</label>
+        <label>Name</label>
         <input name="filename" type="text" class="inputName form-control" placeholder="file name" value="" required autofocus>
 		<button title="save file name" class="save-filename-button btn btn-primary"><span class="glyphicon glyphicon-folder-close" aria-hidden="true"></span> New Folder</button>
 		<div class="preview">
@@ -263,6 +292,31 @@
 
 </div> <!-- /.dashboard -->
 
+
+<div id="new-unit-dialog" class="modal fade">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title">Create Unit</h4>
+      </div>
+      <div class="modal-body">
+		<div class="input-group">
+        <label>Unit Name</label>
+        <input name="filename" type="text" class="inputName form-control" placeholder="file name" value="" required autofocus />
+		</div>
+		<label>Unit Size <span class='totalsize'></span></label>
+		<div>
+			<input name="size" type="text" class="inputSize form-control" placeholder="2" value="" required autofocus />
+		</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="create-button btn btn-primary">Create</button>
+      </div>
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
 
 
 <div id="signup-dialog" class="modal fade" style="display: none">
@@ -295,7 +349,25 @@
 	</div>
 </div>
 
+<div id="admin-dialog" class="modal fade" style="display: none">
+	<div class="row">
+		<div class="col-sm-6 col-md-4 col-md-offset-4">
+			<div class="account-wall">
+				<div class="modal-wrap">
+					<h1 class="text-center login-title">Administration</h1>
 
+					<div>
+						<a href="#" class="text-center new-account btn btn-lg btn-primary btn-block ladda-button" data-dismiss="modal" data-toggle="modal" data-target="#signup-dialog">Create an account </a>
+						<a href="#" class="text-center get-user-account btn btn-lg btn-primary btn-block ladda-button">Get user profile</a>
+
+					</div>
+					<a href="#" class="pull-right need-help" type="button" data-dismiss="modal">Close</a><span class="clearfix"></span>
+					<div class="alert alert-danger" style="width:90%; margin: 0 auto; display: none"></div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
 
 
 
@@ -304,11 +376,14 @@
     <!-- Placed at the end of the document so the pages load faster -->
     <script src="https://code.jquery.com/jquery-1.10.2.min.js"></script>
     <script src="js/extra/bootstrap.min.js"></script>
+    <script src="js/extra/bootstrap-slider.min.js"></script>
     <script src="js/extra/bootbox.min.js"></script>
 	<script src="js/extra/spin.min.js"></script>
 	<script src="js/extra/ladda.min.js"></script>
 	<script src="litefileserver.js"></script>
 
+    <script src="js/units.js"></script>
+    <script src="js/files.js"></script>
     <script src="js/code.js"></script>
   </body>
 </html>

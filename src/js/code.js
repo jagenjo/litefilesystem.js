@@ -1,30 +1,32 @@
 var session = null;
 var system_info = {};
 var filesview_mode = "thumbnails";
+var units = {};
+var current_unit = "";
+var current_folder = "";
 
-(function(){
 
-	//start up
-	$(".startup-dialog").show();
-	LiteFileServer.checkServer( function(resp) {
-		console.log("server checked");
-		$(".startup-dialog").hide();
-		if(resp.status == 1)
-		{
-			system_info = resp.info;
-			console.log("Server ready");
-			systemReady();
-		}
+//start up
+$(".startup-dialog").show();
+LiteFileServer.checkServer( function(resp) {
+	console.log("server checked");
+	$(".startup-dialog").hide();
+	if(resp.status == 1)
+	{
+		system_info = resp.info;
+		console.log("Server ready");
+		systemReady();
+	}
+	else
+	{
+		console.warn("Server not ready");
+		if(resp.status == -10)
+			$(".warning-dialog .content").html("LiteFileServer config file not configured, please, check the <strong>config.sample.php</strong> file in includes and after configure it change the name to <strong>config.php</strong>.");
 		else
-		{
-			console.warn("Server not ready");
-			if(resp.status == -10)
-				$(".warning-dialog .content").html("LiteFileServer config file not configured, please, check the <strong>config.sample.php</strong> file in includes and after configure it change the name to <strong>config.php</strong>.");
-			else
-				$(".warning-dialog .content").html("LiteFileServer database not found, please run the <a href='install.php'>install.php</a>.");
-			$(".warning-dialog").show();
-		}
-	});
+			$(".warning-dialog .content").html("LiteFileServer database not found, please run the <a href='install.php'>install.php</a>.");
+		$(".warning-dialog").show();
+	}
+});
 
 function systemReady()
 {
@@ -43,15 +45,7 @@ function systemReady()
 			$(".form-signin").css("opacity",1);
 
 			if( session.status == LiteFileServer.LOGGED )
-			{
-				//save session
-				window.session = session;
-				window.session.onsessionexpired = onSessionExpired;
-				refreshUserSpace( session.user.used_space, session.user.total_space );
-				$(".login-dialog").hide();
-				$(".dashboard").show();
-				refreshFilesTable();
-			}
+				onLoggedIn(session);
 		});
 	});
 
@@ -80,7 +74,9 @@ function systemReady()
 				$("#inputPassword").val( values["password"] );
 				$("#login-dialog .submit-button").click();
 			}
-		});
+			else
+				Bootbox.alert( resp.msg );
+		},null, session ? session.token : null );
 	});
 
 	//LOGOUT
@@ -104,170 +100,30 @@ function systemReady()
 	//check existing session
 	LiteFileServer.checkExistingSession( function( server_session ) {
 		if(server_session)
-		{
-			window.session = server_session;
-			window.session.onsessionexpired = onSessionExpired;
-			refreshUserSpace( session.user.used_space, session.user.total_space );
-			$(".login-dialog").hide();
-			$(".dashboard").show();
-			refreshFilesTable();
-		}
+			onLoggedIn(server_session);
 		else
 			$(".login-dialog").show();
 	});
 
-	//CREATE FOLDER
-	$(".create-folder-button").click(function(e){
-		bootbox.prompt("Folder name", function(data){
-			if(!data)
-				return;
 
-			var unit = current_unit;
-			var folder = data;
-			var newpath = unit + "/" + current_folder + "/" + folder;
+}
 
-			session.createFolder( newpath, function(f){
-				refreshFolders( unit, function(){
-					refreshFiles( newpath );
-				});
-			}, function(err){
-				bootbox.alert(err);			
-			});
-		});
-	});
+function onLoggedIn(session)
+{
+	//save session
+	window.session = session;
+	window.session.onsessionexpired = onSessionExpired;
 
-	//CREATE FILE
-	$("#newfile-dialog .submit-button").click(function(e){
-		e.stopPropagation();
-		e.preventDefault();
-		if(!session)
-			return;
+	if( session.user.roles && session.user.roles["admin"] )
+		$(".admin-button").show();
+	else
+		$(".admin-button").hide();
 
-		var values = getFormValues( $("#newfile-dialog .form-newfile") );
-			session.uploadFile( current_unit, current_folder, values.filename, values.filecontent, "TEXT", function(){
-				bootbox.alert("File uploaded");
-				refreshFiles(current_unit + "/" + current_folder);
-			}, function(err){
-				bootbox.alert("File error: " + err);
-			}, function(f){
-				console.log("Progress: " + f );
-			});
-	
-		$('#newfile-dialog').modal('hide');
-	});
+	$(".login-dialog").hide();
+	$(".dashboard").show();
 
-	//CREATE UNIT
-	$(".create-unit-button").click(function(e){
-		if(!session)
-			return;
-
-		bootbox.prompt({ title:"Unit name",
-			value: "new unit",
-			callback: function(name) {
-				if(!name)
-					return;
-
-				var size = 2500000; //in bytes
-				session.createUnit( name, size, function(unit, resp){
-					if(!unit)
-						bootbox.alert(resp.msg);
-					if(resp.user)
-						refreshUserSpace( resp.user.used_space, resp.user.total_space );
-					refreshUnits();
-				}, function(err){
-					bootbox.alert(err || "Cannot create unit");
-				});
-			}
-		}); 
-	});	
-
-	$(".refresh-units-button").click(function(e){
-		refreshUnits();
-	});
-
-	//SHARE UNIT
-	$(".share-unit-button").click(function(e){
-		if(!session)
-			return;
-
-		bootbox.prompt({ title:"User name or email address",
-			value: "",
-			callback: function(result) {
-				if(!result)
-					return;
-
-				session.shareUnit( current_unit, result, function(status, resp){
-					bootbox.alert("Unit has been shared");
-				}, function(err){
-					bootbox.alert(err || "Cannot share unit");
-				});
-			}
-		}); 
-	});	
-
-	//SETUP UNIT
-	$(".setup-unit-button").click(function(e){
-		console.log("setup");
-		$("#setup-unit-dialog .inputName").val( current_unit );
-		var root = $("#setup-unit-dialog .users");
-
-		session.getUnitInfo( current_unit , function(unit){
-			root.empty();
-			for(var i in unit.users)
-			{
-				var user = unit.users[i];
-				root.append("<div class='user-item'><span class='glyphicon glyphicon-user' aria-hidden='true'></span> <span class='username'>"+user.username+"</span></div>");
-			}
-		});
-	});
-
-	//enable file drop in units
-	var files_table = $(".files-table")[0];
-	files_table.addEventListener("dragenter", onDrag,false);
-	files_table.addEventListener("dragleave", onDrag,false);
-	files_table.addEventListener("dragover", function(e){ e.preventDefault(); return false;},false);
-	function onDrag(e)
-	{
-		if(e.type == "dragenter")
-			this.style.backgroundColor = "#EEA";
-		else
-			this.style.backgroundColor = "";
-		return true;
-	}
-	files_table.addEventListener("dragover", function(e){ e.preventDefault(); return false;},false);
-	files_table.addEventListener("drop", function(e) {
-		this.style.backgroundColor = "";
-		if (e.dataTransfer.files.length) //dragging file from HD
-		{
-			for(var i = 0; i < e.dataTransfer.files.length; i++)
-			{
-				var file = e.dataTransfer.files[i];
-				showUploadFile( current_unit, current_folder, file.name, file );
-			}
-
-			e.preventDefault();
-			e.stopPropagation();
-			return true;
-		}
-	});
-
-	//CHANGE FILES VIEW
-	$(".changeview-files-button").click(function(){
-		filesview_mode = this.dataset["view"];
-		refreshFiles( current_unit + "/" + current_folder );
-	});
-
-	//PHOTO
-	$(".photo-button").on("change", function (event) {
-		// Get a reference to the taken picture or chosen file
-		var files = event.target.files,
-			file;
-		if (files && files.length > 0) {
-			file = files[0];
-			var filename = "photo_" + Date.now() + file.name;
-			showUploadFile( current_unit, current_folder, filename, file );
-		}
-	});
+	refreshUserInfo( session.user );
+	refreshFilesTable();
 }
 
 function onSessionExpired()
@@ -289,7 +145,7 @@ function showUploadFile( unit, folder, filename, data )
 		//bootbox.alert("File uploaded");
 		refreshFiles( unit + "/" + folder );
 		if(resp.unit)
-			refreshUnitSpace( resp.unit.name, resp.unit.used_size, resp.unit.total_size );
+			refreshUnitInfo( resp.unit );
 
 		progress_element.find(".progress-bar").addClass("progress-bar-success");
 		progress_element.delay(2000).fadeOut(1000, function() { progress_element.remove(); });
@@ -310,21 +166,21 @@ function sessionExpired()
 }
 
 
-var current_unit = "";
-var current_folder = "";
-
-function refreshUserSpace( used_space, total_space )
+function refreshUserInfo( user )
 {
-	var f = used_space / total_space;
+	session.user = user;
+	var f = user.used_space / user.total_space;
 	$(".quota").find(".progress-bar").css("width", ((f * 100)|0) + "%");
-	$(".quota").find(".progress-bar .size").html( (used_space / (1024*1024)).toFixed(1) + " MBs"); //"/"+(total_space / (1024*1024)).toFixed(1)+
+	$(".quota").find(".progress-bar .size").html( LFS.getSizeString(user.used_space) );
 }
 
-function refreshUnitSpace( unit, used_size, total_size )
+function refreshUnitInfo( unit )
 {
-	var f = used_size / total_size;
-	var bar = $("#unit-" + unit + " .unit-size span");
+	var f = unit.used_size / unit.total_size;
+	var bar = $("#unit-" + unit.name + " .unit-size span");
 	bar.css("width", ((f*100)|0) + "%" );
+
+	$("#unit-" + unit.name + " .name").html( unit.metadata.name );
 
 	if(f > 0.9)
 		bar.addClass("danger");
@@ -350,9 +206,11 @@ function refreshUnits()
 		var pos = 1;
 		var root = $(".units-list .content");
 		root.empty();
+		window.units = {};
 		for(var i in units)
 		{
 			var unit = units[i];
+			window.units[ unit.name ] = unit;
 			var descname = unit.metadata["name"];
 			var elem = document.createElement("button");
 			elem.id = "unit-" + unit.name;
@@ -361,11 +219,11 @@ function refreshUnits()
 			if( current_unit == unit.name )
 				elem.className += " selected";
 
-			elem.innerHTML = "<span class='unit-size'><span></span></span><span class='glyphicon glyphicon-hdd' aria-hidden='true'></span> " + descname;
+			elem.innerHTML = "<span class='unit-size'><span></span></span><span class='glyphicon glyphicon-hdd' aria-hidden='true'></span> <span class='name'>" + descname + "</span>";
 			$(root).append(elem);
 			pos++;
 
-			refreshUnitSpace( unit.name, unit.used_size, unit.total_size );
+			refreshUnitInfo( unit );
 
 			//draggable
 			elem.addEventListener("dragenter", onDrag,false);
@@ -393,10 +251,10 @@ function refreshUnits()
 					var target_unit = this.dataset["unit"];
 					session.moveFile( fullpath,  target_unit + "/" + file.filename, function(moved, resp){
 						if(resp.unit)
-							refreshUnitSpace( resp.unit.name, resp.unit.used_size, resp.unit.total_size );
+							refreshUnitInfo( resp.unit );
 						if(resp.target_unit)
 						{
-							refreshUnitSpace( resp.target_unit.name, resp.target_unit.used_size, resp.target_unit.total_size );
+							refreshUnitInfo( resp.target_unit );
 						}
 						refreshFiles( target_unit );
 					}, function(err){
@@ -600,7 +458,7 @@ function refreshFiles( fullpath, on_complete )
 						{
 							console.log("deleted");
 							if(resp.unit)
-								refreshUnitSpace( resp.unit.name, resp.unit.used_size, resp.unit.total_size );
+								refreshUnitInfo( resp.unit );
 							refreshFiles( current_unit + "/" + current_folder );
 						}
 					}, function(err){
@@ -747,4 +605,3 @@ function getFormValues(form)
 }
 
 
-})();
