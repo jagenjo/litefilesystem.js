@@ -1,4 +1,3 @@
-(function(){
 
 //CREATE UNIT
 $(".create-unit-button").click(function(e){
@@ -197,4 +196,3 @@ $("#setup-unit-dialog .delete-unit-button").click(function(e){
 	});
 });
 
-})();

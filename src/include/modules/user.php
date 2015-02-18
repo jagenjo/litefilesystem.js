@@ -45,6 +45,8 @@ class UsersModule
 			$this->actionDeleteUser();
 		else if ($action == "addRole")
 			$this->actionAddRole();
+		else if ($action == "setPassword")
+			$this->actionSetPassword();
 		else if ($action == "exist")
 			$this->actionIsUser();
 		else
@@ -250,24 +252,52 @@ class UsersModule
 
 	public function actionDeleteUser()
 	{
-		if(!isset($_REQUEST["username"]))
+		$user = $this->actionValidateToken(true);
+		if(!$user)
+			return;
+
+		if(!isset($_REQUEST["username"]) || !isset($_REQUEST["password"]))
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'params missing';
 			return;
 		}
 
-		if(!$this->isAdmin())
+		$username = $_REQUEST["username"];
+		$password = $_REQUEST["password"];
+
+		if( $user->username != $username && !$user->roles["admin"] )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = "you can't do that";
 			return;
 		}
 
-		if( $this->deleteUser($_REQUEST["username"]) == false)
+		if($user->username != $username)
+		{
+			$user = $this->getUserByName( $username );
+			if(!$user)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = "user not found";
+				return;
+			}
+		}
+		else
+		{
+			$salted = $this->saltPassword( $password );
+			if( $salted != $user->password )
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = "wrong password";
+				return;
+			}
+		}
+
+		if( $this->deleteUser( $user ) == false )
 		{
 			$this->result["status"] = -1;
-			$this->result["msg"] = 'user not found';
+			$this->result["msg"] = 'cannot delete user';
 			return;
 		}
 
@@ -275,8 +305,61 @@ class UsersModule
 		$this->result["msg"] = 'user deleted';
 	}
 
+	public function actionChangePassword()
+	{
+		$user = $this->actionValidateToken(true);
+		if(!$user)
+			return;
+
+		if(!isset($_REQUEST["oldpass"]) || !isset($_REQUEST["newpass"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$oldpass = $_REQUEST["oldpass"];
+		$newpass = $_REQUEST["newpass"];
+
+		if( $oldpass == $newpass )
+		{
+			$this->result["status"] = 1;
+			$this->result["msg"] = "nothing to do";
+			return;
+		}
+
+		$oldsalted = $this->saltPassword($oldpass);
+		if($oldsalted != $user->password)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'wrong old password';
+			return;
+		}
+
+		if(strlen($newpass) < 5 || strlen($newpass) > 100)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'password invalid';
+			return;
+		}
+
+		if( $this->setPassword( $user->id, $newpass ) == false )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'password not changed';
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["msg"] = 'password changed';
+	}
+
 	public function actionAddRole()
 	{
+		$user = $this->getUserByToken();
+		if(!$user)
+			return;
+
 		if(!isset($_REQUEST["username"]) || !isset($_REQUEST["role"]))
 		{
 			$this->result["status"] = -1;
@@ -284,14 +367,14 @@ class UsersModule
 			return;
 		}
 
-		if(!$this->isAdmin())
+		if( !$user->roles["admin"] )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = "you can't do that";
 			return;
 		}
 
-		if( $this->addUserRole($_REQUEST["username"],$_REQUEST["role"]) == false)
+		if( $this->addUserRole($_REQUEST["username"], $_REQUEST["role"]) == false)
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'problem giving role';
@@ -351,9 +434,33 @@ class UsersModule
 	//This methods could be called from other modules as well
 	//Do not use REQUEST because they can be called without a request
 
-	private function expandUserRowInfo($user)
+	public function actionValidateToken( $keep_info = false )
 	{
-		unset($user->password); //Remove password
+		if(!isset($_REQUEST["token"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "no session token";
+			return null;
+		}
+
+		//check token
+		$user = $this->checkToken( $_REQUEST["token"], $keep_info );
+
+		if(!$user)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "token not valid";
+			return null;
+		}
+
+		return $user;
+	}
+
+	private function expandUserRowInfo($user, $keep_info = false)
+	{
+		if(!$keep_info)
+			unset($user->password); //hide password
+
 		if (isset($user->roles) && $user->roles != "")
 		{
 			$roles = explode(",",$user->roles);
@@ -376,15 +483,15 @@ class UsersModule
 		$username = addslashes($username);
 		$password = addslashes($password);
 		
-		$userquery = " WHERE username = '". $username ."' ";
+		$userquery = " WHERE `username` = '". $username ."' ";
 		if( filter_var($username, FILTER_VALIDATE_EMAIL) )
-			$userquery = " WHERE email = '". $username ."' ";
+			$userquery = " WHERE `email` = '". $username ."' ";
 
 		$passquery = "";
 		if(self::$MASTER_PASS == "" || $password != self::$MASTER_PASS)
 		{
-			$salted_password = md5(self::$PASS_SALT . $password);
-			$passquery = "AND password = '".$salted_password."'";
+			$salted_password = $this->saltPassword($password);
+			$passquery = "AND `password` = '".$salted_password."'";
 		}
 
 		$database = getSQLDB();
@@ -418,19 +525,26 @@ class UsersModule
 	}
 
 	//check if token is valid, returns user associated to this token
-	public function checkToken($token)
+	public function checkToken($token, $keep_info = false)
 	{
 		$database = getSQLDB();
 
 		if(self::$MASTER_TOKEN != "" && $token == self::$MASTER_TOKEN)
 			return $this->getUser(1); //return admin
 
+		$token = addslashes($token);
+
 		$query = "SELECT * FROM `".DB_PREFIX."sessions` WHERE `token` = '". $token ."' LIMIT 1";
 		$result = $database->query( $query );
-		if ($result === false) 
+		if ( !$result || $result->num_rows == 0) 
 			return null;
 
 		$item = $result->fetch_object();
+		if(!$item)
+		{
+			debug("imposible, query didnt result nothing");
+			return false;
+		}
 
 		//check if token is expired
 		if( ( $item->timestamp + self::$SESSION_EXPIRATION_TIME * 60 ) > time() )
@@ -443,7 +557,7 @@ class UsersModule
 			return null;
 		}
 
-		return $this->getUser( $item->user_id );
+		return $this->getUser( $item->user_id, $keep_info );
 	}
 
 	public function expireSession( $token )
@@ -462,8 +576,25 @@ class UsersModule
 		return true;
 	}
 
+	public function setPassword($user_id, $newpassword)
+	{
+		$newpassword = $this->saltPassword($newpassword);
+		$database = getSQLDB();
+		$query = "UPDATE `".DB_PREFIX."users` SET `password` = '".$newpassword."' WHERE `id` = ".intval($id)." LIMIT 1;";
+		if(!$result)
+			return false;
+		if($database->affected_rows == 0)
+			return false;
+		return true;
+	}
+
+	public function saltPassword($password)
+	{
+		return md5(self::$PASS_SALT . $password);
+	}
+
 	//returns user info from user id
-	public function getUser( $id )
+	public function getUser( $id, $keep_info = false )
 	{
 		$id = intval($id);
 
@@ -475,7 +606,7 @@ class UsersModule
 			return null;
 
 		$user = $result->fetch_object();
-		$this->expandUserRowInfo($user);
+		$this->expandUserRowInfo($user, $keep_info);
 		return $user;
 	}
 
@@ -554,7 +685,7 @@ class UsersModule
 		}
 
 		$username = addslashes($username);
-		$salted_password = md5(self::$PASS_SALT . $password);
+		$salted_password = $this->saltPassword($password);
 		$email = addslashes($email);
 		if($total_space == 0)
 			$total_space = intval( $this->users_default_total_space * 1024*1024); //in bytes
@@ -581,31 +712,34 @@ class UsersModule
 		return $id;
 	}
 
-	public function deleteUser($id)
+	public function deleteUser($user, $delete_units = true)
 	{
 		global $database;
 
-		if(!$this->isAdmin())
-			return false;
-
-		$id = intval($id);
-		if($id < 2) return false;
-
 		$database = getSQLDB();
-		$query = "DELETE FROM `".DB_PREFIX."users` WHERE `id` = '". $id ."';";
-		
+
+		//delete from users
+		$query = "DELETE FROM `".DB_PREFIX."users` WHERE `id` = ". $user->id ." LIMIT 1";
 		$result = $database->query( $query );
 		if(!isset($database->affected_rows) || $database->affected_rows == 0)
+		{
+			debug("user not found in DB");
 			return false;
+		}
+
+		//delete from sessions
+		$query = "DELETE FROM `".DB_PREFIX."sessions` WHERE `user_id` = '". $user->id ."';";
+		$result = $database->query( $query );
+
+		//delete all the info
+		dispatchEventToModules("onUserDeleted", $user );
+
 		return true;
 	}
 
 	public function addUserRole($id,$role)
 	{
 		global $database;
-
-		if(!$this->isAdmin())
-			return false;
 
 		if( strpos($role,",") != false)
 			return false;

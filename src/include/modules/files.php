@@ -43,6 +43,7 @@ class FilesModule
 			case "deleteUnit": $this->actionDeleteUnit(); break; //create a new unit
 			case "getFolders":	$this->actionGetFolders(); break; //get folders tree
 			case "createFolder": $this->actionCreateFolder(); break; //create a folder
+			case "deleteFolder": $this->actionDeleteFolder(); break; //create a new unit
 			case "getFilesInFolder": $this->actionGetFilesInFolder(); break; //get files inside one folder
 			case "getFilesTree": $this->actionGetFilesTree(); break; //get all files info
 			case "searchByCategory": $this->actionSearchByCategory(); break; //get files matching a category
@@ -650,6 +651,63 @@ class FilesModule
 		$this->result["status"] = 1;
 	}
 
+	public function actionDeleteFolder()
+	{
+		$user = $this->getUserByToken();
+		if(!$user) //result already filled in getTokenUser
+			return;
+
+		$unit = null;
+		$folder = null;
+
+		if(isset($_REQUEST["fullpath"]))
+		{
+			$path_info = $this->parsePath( $_REQUEST["fullpath"], true );			
+			$unit_name = $path_info->unit;
+			$folder = $path_info->folder;
+		}
+		else if(isset($_REQUEST["folder"]) && isset($_REQUEST["unit"]))
+		{
+			$unit_name = $_REQUEST["unit"];
+			$folder = $_REQUEST["folder"];
+		}
+		else
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$unit = $this->getUnitByName( $unit_name, $user->id );
+		if(!$unit)
+		{
+			$this->result["status"] = -1;
+			debug("actionDeleteFolder getUnitByName: " . $unit_name);
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+		if(!$unit->mode || $unit->mode == "READ")
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'cannot delete';
+			return;
+		}
+
+		//DELETE
+		if( !$this->deleteFolder( $unit, $folder ) )
+		{
+			$this->result["msg"] = "folder cannot be deleted";
+			$this->result["status"] = -1;
+			return;
+		}
+
+		$this->result["msg"] = "folder deleted";
+		$this->result["unit"] = $this->getUnit( $unit->id );
+		$this->result["data"] = $fullpath;
+		$this->result["status"] = 1;
+	}
+
 	public function actionGetFilesInFolder()
 	{
 		$user = $this->getUserByToken();
@@ -693,6 +751,7 @@ class FilesModule
 			return;
 		}
 
+		//remove private info
 		foreach($dbfiles as $i => $file)
 		{
 			unset( $file->id );
@@ -959,36 +1018,37 @@ class FilesModule
 		if(!$user) //result already filled in getTokenUser
 			return;
 
-		$file = null;
+		$fullpath = null;
 
-		if(isset($_REQUEST["fullpath"]))
-			$file = $this->getFileInfoByFullpath( $_REQUEST["fullpath"] );
-		else if( isset($_REQUEST["file_id"]) )
-			$file = $this->getFileInfoById( intval($_REQUEST["file_id"]) );
+		if(isset($_REQUEST["multiple_files"]))
+		{
+			
+		}
+		else if(isset($_REQUEST["fullpath"]))
+		{
+			$this->actionDeleteSingleFile( $user, $_REQUEST["fullpath"] );
+		}
 		else
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = "params missing";
-			return;
+			return false;
 		}
+	}
+
+	public function actionDeleteSingleFile( $user, $fullpath )
+	{
+		$file = $this->getFileInfoByFullpath( $fullpath );
+
+		//else if( isset($_REQUEST["file_id"]) )
+		//	$file = $this->getFileInfoById( intval($_REQUEST["file_id"]) );
 
 		if(!$file)
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = "file not found";
-			return;
+			return false;
 		}
-
-		/* 
-		$unit = $this->getUnit( $file->unit_id, $user->id );
-		if(!$unit || !$unit->mode || $unit->mode == "READ")
-		{
-			$this->result["status"] = -1;
-			debug("actionDeleteFile check unit mode");
-			$this->result["msg"] = 'unit not found or not allowed';
-			return;
-		}
-		*/
 
 		//compute the size to reduce from the quota
 		$fullpath = $file->unit_name . "/" . $file->folder . "/" . $file->filename;
@@ -998,7 +1058,7 @@ class FilesModule
 			$this->result["status"] = -1;
 			debug("Filesize of " . $fullpath );
 			$this->result["msg"] = "File size cannot be computed";
-			return;
+			return false;
 		}
 
 		//delete the file
@@ -1006,7 +1066,7 @@ class FilesModule
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = $this->last_error;
-			return;
+			return false;
 		}
 
 		$this->changeUnitUsedSize( $file->unit_id, -$bytes, true );
@@ -1015,6 +1075,8 @@ class FilesModule
 		$this->result["unit"] = $unit;
 		$this->result["status"] = 1;
 		$this->result["msg"] = "file deleted";
+
+		return true;
 	}
 
 	public function actionMoveFile()
@@ -1372,6 +1434,27 @@ class FilesModule
 		self::createFolder( $unit->name . "/empty_folder" );
 	}
 
+	public function onUserDeleted($user)
+	{
+		$units = $this->getUserUnits( $user->id, true );
+
+		//delete all his files?
+		//no, user can leave the system leaving files with no author, they belong to the unit
+
+		//delete every unit
+		foreach($units as $i => $unit )
+		{
+			if( $this->deleteUnit( $unit->id ) )
+				debug("Unit deleted: " . $unit->id);
+		}
+
+		//delete from privileges
+		$database = getSQLDB();
+		$query = "DELETE FROM `".DB_PREFIX."privileges` WHERE `user_id` = ". intval($user->id) ;
+		$result = $database->query( $query );
+		return true;
+	}
+
 	public function onSystemInfo(&$info)
 	{
 		$max_upload = (int)(ini_get('upload_max_filesize'));
@@ -1404,16 +1487,32 @@ class FilesModule
 		if(!$is_folder)
 			$info->filename = $this->clearPathName( array_pop($t) );
 		$info->folder = $this->clearPathName( implode( "/", $t ) );
-		$info->fullpath = $unit->unit . "/" . $info->folder;
+		$info->fullpath = $info->unit . "/" . $info->folder;
 		if(!$is_folder)
-			$info->fullpath .= "/" . $info->filename;
-		if($info->folder == "")
-			$info->folder = "/";
+			$info->fullpath .= ( $info->folder == "" ? "" : "/" ) . $info->filename;
+		if($info->folder == "/")
+			$info->folder = "";
 		$info->fullpath = $this->clearPathName( $info->fullpath );
 		return $info;
 	}
 
-	public function isExtensionValid($filename)
+	public function validateFilename($filename)
+	{
+		//this could be improved by a regular expression...
+		$forbidden = str_split("/|,$:;");
+
+		if( strpos($filename,"..") != FALSE )
+			return false;
+
+		foreach($forbidden as $i => $c)
+		{
+			if( strpos($filename, $c) != FALSE  )
+				return false;
+		}
+		return true;
+	}
+
+	public function validateExtension($filename)
 	{
 		$extension = pathinfo($filename, PATHINFO_EXTENSION);
 
@@ -1666,11 +1765,17 @@ class FilesModule
 		return $unit;
 	}
 
-	public function getUserUnits( $user_id )
+	//return units where the user has privileges or is the owner
+	public function getUserUnits( $user_id, $owner = false )
 	{
 		//check privileges
 		$database = getSQLDB();
-		$query = "SELECT * FROM `".DB_PREFIX."privileges` as privileges, `".DB_PREFIX."units` AS units  WHERE `user_id` = " . intval($user_id) . " AND units.id = privileges.unit_id";
+
+		if($owner)
+			$query = "SELECT * FROM `".DB_PREFIX."units` WHERE `author_id` = " . intval($user_id);
+		else
+			$query = "SELECT * FROM `".DB_PREFIX."privileges` as privileges, `".DB_PREFIX."units` AS units  WHERE `user_id` = " . intval($user_id) . " AND units.id = privileges.unit_id";
+
 		$result = $database->query( $query );
 		$units = Array();
 		while($unit = $result->fetch_object())
@@ -1737,6 +1842,8 @@ class FilesModule
 	//doesnt check privileges or modifies unit size
 	public function storeFile($user_id, $unit_id, $folder, $filename, $fileData, $category, $metadata )
 	{
+		$database = getSQLDB();
+
 		$user_id = intval($user_id);
 		$unit_id = intval($unit_id);
 		$filename = addslashes( trim($filename) );
@@ -1745,16 +1852,17 @@ class FilesModule
 		$folder = addslashes( trim($folder) );
 		$category = addslashes($category);
 		$metadata = addslashes($metadata);
+		$size = strlen( $fileData );
 
 		//SAFETY FIRST
-		if( strpos($filename,"..") != FALSE || strpos($filename,"/") != FALSE || strpos($folder,"..") != FALSE)
+		if(!$this->validateFilename( $filename) || strpos($folder,"..") != FALSE)
 		{
 			debug("Filename contains invalid characters");
 			$this->last_error = "Invalid filename";
 			return null;
 		}
 
-		if( !$this->isExtensionValid( $filename ) )
+		if( !$this->validateExtension( $filename ) )
 		{
 			debug("invalid extension: " . $filename);
 			$this->last_error = "Extension not allowed: " . $filename;
@@ -1799,13 +1907,21 @@ class FilesModule
 			}		
 			$id = $file_info->id;	
 			debug("file found with the same name, overwriting");
+
+			//update size
+			if( $size != intval( $file_info->size ) )
+			{
+				$query = "UPDATE `".DB_PREFIX."files` SET `size` = ".$size." WHERE `id` = ".$id." LIMIT 1";
+				$result = $database->query( $query );
+				if($database->affected_rows == 0)
+					debug("SIZE not changed");
+			}
 		}
 		else //file dont exist
 		{
 			//insert DB entry
-			$query = "INSERT INTO `".DB_PREFIX."files` (`id` , `filename` , `category` , `unit_id`, `folder` , `metadata` , `author_id`) VALUES ( NULL ,'".$filename ."','".$category."',".$unit_id.",'" . $folder. "', '".$metadata."', ".$user_id .")";
+			$query = "INSERT INTO `".DB_PREFIX."files` (`id` , `filename` , `category` , `unit_id`, `folder` , `metadata` , `author_id` , `size`) VALUES ( NULL ,'".$filename ."','".$category."',".$unit_id.",'" . $folder. "', '".$metadata."', ".$user_id ." , ".$size." )";
 			
-			$database = getSQLDB();
 			$result = $database->query( $query );
 
 			$id = -1;
@@ -1871,6 +1987,36 @@ class FilesModule
 			return false;
 		}
 
+		return true;
+	}
+
+	public function deleteFolder( $unit, $folder )
+	{
+		if( strpos($folder, "..") != FALSE )
+			return false;
+
+		$folder = addslashes($folder);
+
+		$usedsize = 0;
+
+		//delete previews
+		$files = $this->getFilesFromDB( $unit->id, $folder, true );
+		foreach( $files as $i => $file )
+		{
+			$fullpath = $unit->name . "/" . $file->folder . "/" . $file->filename;
+			$usedsize += $file->size;
+			$this->deletePreview($fullpath);
+		}
+
+		//remove files from DB
+		$database = getSQLDB();
+		$query = "DELETE FROM `".DB_PREFIX."files` WHERE (`folder` = '". $folder . "' OR `folder` = '". $folder . "/%') AND `unit_id` = " . intval($unit->id);
+		$result = $database->query( $query );
+
+		$this->changeUnitUsedSize( $unit->id, -$usedsize, true );
+
+		//delete folder
+		$this->delTree( $unit->name . "/" . $folder );
 		return true;
 	}
 
@@ -2081,7 +2227,7 @@ class FilesModule
 		$new_folder = $this->clearPathName( $new_folder );
 
 		//SAFETY FIRST
-		if( strpos($new_filename,"..") != FALSE || strpos($new_filename,"/") != FALSE )
+		if( !$this->validateFilename( $new_filename) )
 		{
 			debug("Filename contains invalid characters");
 			$this->last_error = "INVALID FILENAME";
@@ -2096,7 +2242,7 @@ class FilesModule
 		}
 
 		//CHECK EXTENSION
-		if(! $this->isExtensionValid( $new_filename ) )
+		if( !$this->validateExtension( $new_filename ) )
 		{
 			debug("Extension is invalid");
 			$this->last_error = "INVALID FILENAME: " . $new_filename;
@@ -2498,10 +2644,12 @@ class FilesModule
 
 		$database = getSQLDB();
 
+		$subfolders_str = $subfolders ? " OR `folder` = '" . $folder . "/%' " : "";
+
 		if($usernames)
-			$query = "SELECT files.*, users.username AS author_username FROM `".DB_PREFIX."files` AS files, `".DB_PREFIX."users` AS users WHERE `folder` = '" . $folder . ( $subfolders ? "%" : "") ."' AND unit_id = ".intval($unit_id) ." AND users.id = files.author_id";
+			$query = "SELECT files.*, users.username AS author_username FROM `".DB_PREFIX."files` AS files, `".DB_PREFIX."users` AS users WHERE (`folder` = '" . $folder . "' " . $subfolders_str .") AND unit_id = ".intval($unit_id) ." AND users.id = files.author_id";
 		else
-			$query = "SELECT * FROM `".DB_PREFIX."files` WHERE `folder` = '" . $folder . ( $subfolders ? "%" : "") ."' AND unit_id = ".intval($unit_id);
+			$query = "SELECT * FROM `".DB_PREFIX."files` WHERE (`folder` = '" . $folder . "' " . $subfolders_str .") AND unit_id = ".intval($unit_id);
 		
 		$result = $database->query( $query );
 		if ($result === false) 
@@ -2509,7 +2657,10 @@ class FilesModule
 
 		$files = Array();
 		while($file = $result->fetch_object())
+		{
+			//cannot get unit name unless I modify the query
 			$files[] = $file;
+		}
 
 		//debug($query);
 		return $files;		

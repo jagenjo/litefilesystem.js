@@ -92,6 +92,24 @@ button:focus {
 	margin-left: 4px;
 }
 
+.file-item .checkbox {
+	cursor: pointer;
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	display: inline-block;
+	background-color: #333;
+	border: 2px solid black;
+	border-radius: 2px;
+	width: 14px;
+	height: 14px;
+	margin: 0;
+}
+
+.file-item.selected .checkbox {
+	background-color: #2F6;
+}
+
 .file-row-item {
 	cursor: pointer;
 	padding: 0.2em;

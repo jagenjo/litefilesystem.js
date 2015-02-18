@@ -123,7 +123,10 @@ var LiteFileServer = {
 			var canvas = document.createElement("canvas");
 			canvas.width = canvas.height = LFS.preview_size;
 			var ctx = canvas.getContext("2d");
-			var f = LFS.preview_size / (img.width > img.height ? img.width : img.height);
+			var f = LFS.preview_size / (img.width < img.height ? img.width : img.height);
+			var offx = (LFS.preview_size - img.width * f) * 0.5;
+			var offy = (LFS.preview_size - img.height * f) * 0.5;
+			ctx.translate(offx,offy); //center
 			ctx.scale(f,f);
 			ctx.drawImage(img,0,0);
 			var dataURL = canvas.toDataURL("image/jpeg");
@@ -210,15 +213,15 @@ var LiteFileServer = {
 		if(!is_folder)
 			filename = this.clearPath( t.pop() );
 		var folder = this.clearPath( t.join("/") );
-		if(folder == "")
-			folder = "/";
+		if(folder == "/")
+			folder = "";
 
 		return {
 			unit: unit,
 			folder: folder,
 			filename: filename,
 			fullpath: fullpath,
-			getFullpath: function() { return this.unit + "/" + this.folder + "/" + this.filename }
+			getFullpath: function() { return this.unit + "/" + this.folder + (this.folder != "" ? "/" : "") + this.filename }
 		};
 	},
 
@@ -302,9 +305,13 @@ Session.prototype.logout = function(on_complete, on_error)
 	});
 }
 
-Session.prototype.removeAccount = function(user_id, on_complete)
+Session.prototype.deleteAccount = function( password, on_complete )
 {
-	//TODO
+	var that = this;
+	return this.request( this.url,{action: "user/delete", username: this.user.username, password: password }, function(resp){
+		if(on_complete)
+			on_complete(resp.status == 1, resp);
+	});
 }
 
 
@@ -435,7 +442,7 @@ Session.prototype.getUnits = function(on_complete)
 		}
 
 		if(on_complete)
-			on_complete(resp.data);
+			on_complete( resp.data, resp );
 	});
 }
 
@@ -451,7 +458,7 @@ Session.prototype.getFolders = function( unit, on_complete, on_error )
 		}
 
 		if(on_complete)
-			on_complete(resp.data);
+			on_complete( resp.data, resp );
 	});
 }
 
@@ -467,7 +474,24 @@ Session.prototype.createFolder = function( fullpath, on_complete, on_error )
 		}
 
 		if(on_complete)
-			on_complete(resp.data);
+			on_complete(resp.status == 1, resp );
+	});
+}
+
+
+Session.prototype.deleteFolder = function( fullpath, on_complete, on_error )
+{
+	return this.request( this.url,{action: "files/deleteFolder", fullpath: fullpath }, function(resp){
+
+		if(resp.status != 1)
+		{
+			if(on_error)
+				on_error(resp.msg);
+			return;
+		}
+
+		if(on_complete)
+			on_complete(resp.status == 1, resp );
 	});
 }
 
@@ -491,7 +515,7 @@ Session.prototype.getFiles = function( unit, folder, on_complete, on_error )
 			file.fullpath = unit + "/" + folder + "/" + file.filename;
 		}
 		if(on_complete)
-			on_complete(resp.data);
+			on_complete(resp.data, resp);
 	});
 }
 
@@ -512,7 +536,7 @@ Session.prototype.getFilesByPath = function( fullpath, on_complete, on_error )
 			file.fullpath = resp.unit + "/" + resp.folder + "/" + file.filename;
 		}
 		if(on_complete)
-			on_complete(resp.data);
+			on_complete(resp.data, resp);
 	});
 }
 
@@ -528,7 +552,7 @@ Session.prototype.getFileInfo = function( fullpath, on_complete )
 {
 	return this.request( this.url,{ action: "files/getFileInfo", fullpath: fullpath }, function(resp){
 		if(on_complete)
-			on_complete(resp.data);
+			on_complete(resp.data, resp);
 	});
 }
 

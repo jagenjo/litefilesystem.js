@@ -18,6 +18,32 @@ $(".create-folder-button").click(function(e){
 	});
 });
 
+
+$(".delete-folder-button").click(function(e){
+	bootbox.confirm("Are you sure you want to delete the folder '"+current_folder+"'?", function(data){
+		if(!data)
+			return;
+
+		var unit = current_unit;
+		var fullpath = unit + "/" + current_folder;
+
+		session.deleteFolder( fullpath, function(v, resp){
+			if(resp.unit)
+			{
+				units[ resp.unit.name ] = resp.unit;
+				refreshUnitInfo( resp.unit );
+				refreshUnitSetup( resp.unit.name );
+			}
+			refreshFolders( unit, function(){
+				refreshFiles( unit + "/" );
+			});
+		}, function(err){
+			bootbox.alert(err);			
+		});
+	});
+});
+
+
 //CREATE FILE
 $("#newfile-dialog .submit-button").click(function(e){
 	e.stopPropagation();

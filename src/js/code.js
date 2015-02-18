@@ -95,6 +95,22 @@ function systemReady()
 		});
 	});
 
+	//DELETE
+	$(".delete-account-button").click( function(e) {
+
+		bootbox.prompt("Are you sure you want to delete your account? If you want to continue you must enter your account password", function(v){
+			if(!v)
+				return;
+			session.deleteAccount( v, function(v, resp) { 
+				if(v)
+					onSessionExpired(); 
+				else
+					bootbox.alert(resp.msg);
+				});
+		});
+	});
+
+
 
 
 	//check existing session
@@ -432,6 +448,10 @@ function refreshFiles( fullpath, on_complete )
 
 			$(item).find(".filename a").html( file.filename ).attr("href", LFS.files_path + file.fullpath );
 			$(root).append(item);
+
+			$(item).find(".checkbox").on("click", function(e){
+				$(this.parentNode).toggleClass("selected");
+			});
 
 			//draggable
 			item.addEventListener("dragstart", function(e) {

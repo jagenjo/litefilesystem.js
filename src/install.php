@@ -4,8 +4,8 @@
 	$console = php_sapi_name() == "cli";
 	$end_string = $console ? "" : "</div></body></html>";
 
-	// remove the 0 to allow reinstall 
-	if(1 && isset( $_REQUEST["force"] ) || ($console && count($argv) > 1 && $argv[1] == "force"))
+	// allows to reinstall from console
+	if( $console && count($argv) > 1 && $argv[1] == "force" )
 		$force = true;
 
 	function showMessage($msg, $type = "danger")
