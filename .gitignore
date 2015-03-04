@@ -1,0 +1,4 @@
+src/include/config.php
+src/include/trace.log
+app/*
+files/*

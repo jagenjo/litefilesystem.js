@@ -2,9 +2,12 @@
 
 var LiteFileServer = {
 	version: "0.1a",
-	url: "./server.php",
+	server_path: "",
+	server_filename: "server.php",
+	server_url: "./server.php",
 	files_path: "./files/",
-	pics_path: "_pics",
+	preview_prefix: "_tn_",
+	preview_sufix: ".jpg",
 	previews: "local", //generate previews in local/server
 	generate_preview: true,
 	preview_size: 128,
@@ -15,19 +18,27 @@ var LiteFileServer = {
 
 	TOKEN_NAME: "lfs_token", //used for the local storage storing
 
+	setup: function( server_path, on_complete )
+	{
+		this.server_url = server_path + this.server_filename;
+		this.server_path = server_path;
+
+		this.checkServer( on_complete );
+	},
+
 	//create a session
 	login: function( username, password, on_complete)
 	{
 		//create session
 		var session = new LiteFileServer.Session();
-		session.url = this.url;
+		session.server_url = this.server_url;
 		session.status = LiteFileServer.WAITING;
 
 		//avoid sending the login plain in the form with a catchy name
 		var userpass = btoa( username + "|" + password );
 
 		//fetch info
-		this.request(this.url, { action:"user/login", loginkey: userpass}, function(resp){
+		this.request(this.server_url, { action:"user/login", loginkey: userpass}, function(resp){
 			console.log(resp);
 			session.last_resp = resp;
 			session.user = resp.user;
@@ -45,13 +56,13 @@ var LiteFileServer = {
 	checkServer: function( on_complete )
 	{
 		console.log("Checking Server");
-		this.request(this.url, { action:"system/ready" }, function(resp) {
+		this.request(this.server_url, { action:"system/ready" }, function(resp) {
 			LFS.system_info = resp.info;
 			LFS.files_path = resp.info.files_path;
-			LFS.pics_path = resp.info.pics_path;
-			console.log(resp);
+			LFS.preview_prefix = resp.info.preview_prefix;
+			LFS.preview_sufix = resp.info.preview_sufix;
 			if(on_complete)
-				on_complete(resp);
+				on_complete(resp.status == 1, resp );
 		}, function(error){
 			console.log("Error Checking Server");
 			if(on_complete)
@@ -69,7 +80,7 @@ var LiteFileServer = {
 			return;
 		}
 
-		this.request( this.url,{action: "user/checkToken", token: old_token}, function(resp){
+		this.request( this.server_url,{action: "user/checkToken", token: old_token}, function(resp){
 			if(!resp.user)
 				localStorage.removeItem( LiteFileServer.TOKEN_NAME );
 
@@ -79,7 +90,7 @@ var LiteFileServer = {
 			if(resp.user)
 			{
 				var session = new LiteFileServer.Session();
-				session.url = LiteFileServer.url;
+				session.server_url = LiteFileServer.server_url;
 				session.status = LiteFileServer.LOGGED;
 				session.user = resp.user;
 				session.token = old_token;
@@ -96,7 +107,7 @@ var LiteFileServer = {
 		var params = {action: "user/create", username: user, password: password, email: email };
 		if(admin_token)
 			params.admin_token = admin_token;
-		return this.request( this.url,params, function(resp){
+		return this.request( this.server_url, params, function(resp){
 			console.log(resp);
 			if(on_complete)
 				on_complete( resp.status == 1, resp );
@@ -110,6 +121,7 @@ var LiteFileServer = {
 		reader.readAsDataURL(file);
 
 		var img = null;
+		var that = this;
 
 		function loaded(e)
 		{
@@ -129,7 +141,16 @@ var LiteFileServer = {
 			ctx.translate(offx,offy); //center
 			ctx.scale(f,f);
 			ctx.drawImage(img,0,0);
-			var dataURL = canvas.toDataURL("image/jpeg");
+			var format = "";
+			switch( that.preview_sufix.toLowerCase() )
+			{
+				case ".jpg": format = "image/jpeg"; break;
+				case ".png": format = "image/png"; break;
+				default:
+					console.error("format unknown");
+					return;
+			}
+			var dataURL = canvas.toDataURL(format);
 			if(on_complete)
 				on_complete(dataURL, img, canvas);
 		}
@@ -201,13 +222,32 @@ var LiteFileServer = {
 	{
 		var t = path.split("/");
 		t = t.filter( function(v) { return !!v;} );
+
+		//apply "../", sometimes this gives me problems
+		var result = [];
+		for(var i = 1; i < t.length; i++)
+		{
+			if(t[i] == "..")
+				result.pop();
+			else
+				result.push( t[i] );
+		}
+
 		return t.join("/");
+	},
+
+	getFullpath: function(unit,folder,filename)
+	{
+		return this.clearPath(unit + "/" + folder + "/" + filename);
 	},
 
 	parsePath: function(fullpath, is_folder)
 	{
 		fullpath = this.clearPath(fullpath); //remove slashes
 		var t = fullpath.split("/");
+		if(t.length < 2)
+			return { unit: is_folder ? fullpath : "",folder:"", filename: is_folder ? "" : fullpath, fullpath: fullpath };
+
 		var unit = t.shift();
 		var filename = "";
 		if(!is_folder)
@@ -225,13 +265,20 @@ var LiteFileServer = {
 		};
 	},
 
-	getThumbPath: function(fullpath)
+	getPreviewPath: function(fullpath)
 	{
+		if(!fullpath)
+			return "";
 		var info = this.parsePath(fullpath);
 		var folder = info.folder;
 		if(folder == "/")
 			folder = "";
-		return this.files_path + "/" + info.unit + "/" + this.pics_path + "/" + btoa( folder + "/" + info.filename ) + ".jpg";
+		var server = this.server_path + "/";
+		if(!this.server_path || this.server_path == "./" || this.server_path == "/")
+			server = "";
+		var path = server + this.files_path + "/" + info.unit + "/" + folder + "/" + this.preview_prefix + info.filename + this.preview_sufix;
+		path = this.clearPath( path );
+		return path;
 	},
 
 	getSizeString: function( size )
@@ -293,7 +340,7 @@ Session.prototype.logout = function(on_complete, on_error)
 	if(	localStorage.getItem( LiteFileServer.TOKEN_NAME ) == this.token)
 		localStorage.removeItem( LiteFileServer.TOKEN_NAME );	
 
-	return this.request( this.url,{action: "user/logout" }, function(resp){
+	return this.request( this.server_url,{action: "user/logout" }, function(resp){
 		if(resp.status != 1)
 		{
 			if(on_error)
@@ -308,7 +355,7 @@ Session.prototype.logout = function(on_complete, on_error)
 Session.prototype.deleteAccount = function( password, on_complete )
 {
 	var that = this;
-	return this.request( this.url,{action: "user/delete", username: this.user.username, password: password }, function(resp){
+	return this.request( this.server_url,{action: "user/delete", username: this.user.username, password: password }, function(resp){
 		if(on_complete)
 			on_complete(resp.status == 1, resp);
 	});
@@ -319,7 +366,7 @@ Session.prototype.deleteAccount = function( password, on_complete )
 Session.prototype.createUnit = function(unit_name, size, on_complete)
 {
 	var that = this;
-	return this.request( this.url,{action: "files/createUnit", unit_name: unit_name, size: size }, function(resp){
+	return this.request( this.server_url,{action: "files/createUnit", unit_name: unit_name, size: size }, function(resp){
 		if(resp.unit)
 		{
 			Session.processUnit(resp.unit);
@@ -333,7 +380,7 @@ Session.prototype.createUnit = function(unit_name, size, on_complete)
 Session.prototype.deleteUnit = function(unit_name, on_complete)
 {
 	var that = this;
-	return this.request( this.url,{action: "files/deleteUnit", unit_name: unit_name }, function(resp){
+	return this.request( this.server_url,{action: "files/deleteUnit", unit_name: unit_name }, function(resp){
 		if(resp.status == 1)
 			delete that.units[ unit_name ];
 		if(on_complete)
@@ -343,7 +390,7 @@ Session.prototype.deleteUnit = function(unit_name, on_complete)
 
 Session.prototype.inviteUserToUnit = function(unit_name, username, on_complete)
 {
-	return this.request( this.url,{action: "files/inviteUserToUnit", unit_name: unit_name, username: username }, function(resp){
+	return this.request( this.server_url,{action: "files/inviteUserToUnit", unit_name: unit_name, username: username }, function(resp){
 		if(on_complete)
 			on_complete(resp.status == 1, resp);
 	});
@@ -351,7 +398,7 @@ Session.prototype.inviteUserToUnit = function(unit_name, username, on_complete)
 
 Session.prototype.removeUserFromUnit = function(unit_name, username, on_complete)
 {
-	return this.request( this.url,{action: "files/removeUserFromUnit", unit_name: unit_name, username: username }, function(resp){
+	return this.request( this.server_url,{action: "files/removeUserFromUnit", unit_name: unit_name, username: username }, function(resp){
 		if(on_complete)
 			on_complete(resp.status == 1, resp);
 	});
@@ -361,7 +408,7 @@ Session.prototype.removeUserFromUnit = function(unit_name, username, on_complete
 Session.prototype.getUnitInfo = function(unit_name, on_complete)
 {
 	var that = this;
-	return this.request( this.url,{action: "files/getUnitInfo", unit_name: unit_name }, function(resp){
+	return this.request( this.server_url,{action: "files/getUnitInfo", unit_name: unit_name }, function(resp){
 		if(resp.unit)
 		{
 			Session.processUnit(resp.unit);
@@ -386,7 +433,7 @@ Session.prototype.setUnitInfo = function(unit_name, info, on_complete)
 	}
 	if(info.total_size && typeof(info.total_size) == "number")
 		params.total_size = parseInt( info.total_size );
-	return this.request( this.url,params, function(resp){
+	return this.request( this.server_url,params, function(resp){
 
 		if(resp.unit)
 		{
@@ -403,7 +450,7 @@ Session.prototype.setUnitMetadata = function(unit_name, metadata, on_complete)
 	var that = this;
 	if( typeof(metadata) == "object")
 		metadata = JSON.stringify(metadata);
-	return this.request( this.url,{action: "files/setUnitInfo", unit_name: unit_name, info: metadata }, function(resp){
+	return this.request( this.server_url,{action: "files/setUnitInfo", unit_name: unit_name, info: metadata }, function(resp){
 		if(resp.unit)
 		{
 			Session.processUnit(resp.unit);
@@ -430,7 +477,26 @@ Session.processUnit = function( unit )
 Session.prototype.getUnits = function(on_complete)
 {
 	var that = this;
-	return this.request( this.url,{action: "files/getUnits"}, function(resp){
+	return this.request( this.server_url,{action: "files/getUnits"}, function(resp){
+		if(resp.data)
+		{
+			for(var i in resp.data)
+			{
+				var unit = resp.data[i];
+				Session.processUnit(unit);
+				that.units[ unit.name ] = unit;
+			}
+		}
+
+		if(on_complete)
+			on_complete( resp.data, resp );
+	});
+}
+
+Session.prototype.getUnitsAndFolders = function(on_complete)
+{
+	var that = this;
+	return this.request( this.server_url,{action: "files/getUnits", folders: true}, function(resp){
 		if(resp.data)
 		{
 			for(var i in resp.data)
@@ -449,7 +515,7 @@ Session.prototype.getUnits = function(on_complete)
 //folders
 Session.prototype.getFolders = function( unit, on_complete, on_error )
 {
-	return this.request( this.url,{ action: "files/getFolders", unit: unit }, function(resp){
+	return this.request( this.server_url,{ action: "files/getFolders", unit: unit }, function(resp){
 		if(resp.status != 1)
 		{
 			if(on_error)
@@ -464,7 +530,7 @@ Session.prototype.getFolders = function( unit, on_complete, on_error )
 
 Session.prototype.createFolder = function( fullpath, on_complete, on_error )
 {
-	return this.request( this.url,{action: "files/createFolder", fullpath: fullpath }, function(resp){
+	return this.request( this.server_url,{action: "files/createFolder", fullpath: fullpath }, function(resp){
 
 		if(resp.status != 1)
 		{
@@ -481,7 +547,7 @@ Session.prototype.createFolder = function( fullpath, on_complete, on_error )
 
 Session.prototype.deleteFolder = function( fullpath, on_complete, on_error )
 {
-	return this.request( this.url,{action: "files/deleteFolder", fullpath: fullpath }, function(resp){
+	return this.request( this.server_url,{action: "files/deleteFolder", fullpath: fullpath }, function(resp){
 
 		if(resp.status != 1)
 		{
@@ -496,24 +562,43 @@ Session.prototype.deleteFolder = function( fullpath, on_complete, on_error )
 }
 
 //files
+
+Session.processFileList = function(list)
+{
+	if(!list)
+		return;
+
+	for(var i in list)
+	{
+		var file = list[i];
+		file.fullpath = file.unit + "/" + file.folder + "/" + file.filename;
+
+		if(file.metadata)
+		{
+			try
+			{
+				file.metadata = JSON.parse(file.metadata);
+			}
+			catch (err)
+			{
+			}
+		}
+	}
+}
+
 Session.prototype.getFiles = function( unit, folder, on_complete, on_error )
 {
-	return this.request( this.url,{ action: "files/getFilesInFolder", unit: unit, folder: folder }, function(resp){
+	return this.request( this.server_url,{ action: "files/getFilesInFolder", unit: unit, folder: folder }, function(resp){
 
-		if(resp.status < 0)
+		if(resp.status < 1)
 		{
 			if(on_error)
 				on_error(resp.msg);
 			return;
 		}
 
-		for(var i in resp.data)
-		{
-			var file = resp.data[i];
-			//file.getLink = function() { return this.fullpath; }
-			file.folder = folder;
-			file.fullpath = unit + "/" + folder + "/" + file.filename;
-		}
+		Session.processFileList( resp.data, unit + "/" + folder );
+
 		if(on_complete)
 			on_complete(resp.data, resp);
 	});
@@ -521,7 +606,7 @@ Session.prototype.getFiles = function( unit, folder, on_complete, on_error )
 
 Session.prototype.getFilesByPath = function( fullpath, on_complete, on_error )
 {
-	return this.request( this.url,{ action: "files/getFilesInFolder", fullpath: fullpath }, function(resp){
+	return this.request( this.server_url,{ action: "files/getFilesInFolder", fullpath: fullpath }, function(resp){
 
 		if(resp.status < 0)
 		{
@@ -530,11 +615,8 @@ Session.prototype.getFilesByPath = function( fullpath, on_complete, on_error )
 			return;
 		}
 
-		for(var i in resp.data)
-		{
-			var file = resp.data[i];
-			file.fullpath = resp.unit + "/" + resp.folder + "/" + file.filename;
-		}
+		Session.processFileList(resp.data, fullpath );
+
 		if(on_complete)
 			on_complete(resp.data, resp);
 	});
@@ -542,7 +624,18 @@ Session.prototype.getFilesByPath = function( fullpath, on_complete, on_error )
 
 Session.prototype.searchByCategory = function( category, on_complete )
 {
-	return this.request( this.url,{ action: "files/searchByCategory", category: category }, function(resp){
+	return this.request( this.server_url,{ action: "files/searchFiles", category: category }, function(resp){
+
+		Session.processFileList(resp.data);
+		if(on_complete)
+			on_complete(resp.data);
+	});
+}
+
+Session.prototype.searchByFilename = function( filename, on_complete )
+{
+	return this.request( this.server_url,{ action: "files/searchFiles", filename: filename }, function(resp){
+		Session.processFileList(resp.data);
 		if(on_complete)
 			on_complete(resp.data);
 	});
@@ -550,36 +643,61 @@ Session.prototype.searchByCategory = function( category, on_complete )
 
 Session.prototype.getFileInfo = function( fullpath, on_complete )
 {
-	return this.request( this.url,{ action: "files/getFileInfo", fullpath: fullpath }, function(resp){
+	return this.request( this.server_url,{ action: "files/getFileInfo", fullpath: fullpath }, function(resp){
 		if(on_complete)
 			on_complete(resp.data, resp);
 	});
 }
 
-//actions
-Session.prototype.uploadFile = function( unit, folder, filename, data, category, on_complete, on_error, on_progress )
+//Upload a file to the server
+//extra could be category, metadata (object or string), preview (in base64)
+Session.prototype.uploadFile = function( fullpath, data, extra, on_complete, on_error, on_progress )
 {
-	category = category || "TEXT";
+	var info = LFS.parsePath( fullpath );
+	var unit = info.unit;
+	var folder = info.folder;
+	var filename = info.filename;
 
+	//resolve encoding
 	var encoding = "";
-	if( typeof(data) != "string" )
+	if( data.constructor == ArrayBuffer )
+	{
+		data = new Blob([data.data], {type: "application/octet-binary"});
+		encoding = "file";
+	}
+	else if( typeof(data) != "string" )
 		encoding = "file";
 
 	var ext = filename.split('.').pop().toLowerCase();
 	var extensions = ["png","jpg","jpeg"];
 
-	var params = { action: "files/uploadFile", unit: unit, folder: folder, filename: filename, category: category, encoding: encoding, data: data };
+	var params = { action: "files/uploadFile", unit: unit, folder: folder, filename: filename, encoding: encoding, data: data };
+	
+	if(extra)
+	{
+		if( typeof(extra) == "string")
+			params.category = extra;
+		else {
+			if(extra.category)
+				params.category = extra.category;
+			if(extra.metadata)
+				params.metadata = typeof(extra.metadata) == "object" ? JSON.stringify(extra.metadata) : extra.metadata;
+			if(extra.preview)
+				params.preview = extra.preview;
+		}
+	}
+
 	var that = this;
 
 	if(LFS.generate_preview && LFS.previews == "local" && extensions.indexOf(ext) != -1 )
 	{
 		LFS.generatePreview( data, function( prev_data ) {
 			params.preview = prev_data;
-			that.request( that.url, params, on_resp, on_error, on_progress );
+			that.request( that.server_url, params, on_resp, on_error, on_progress );
 		});
 	}
 	else
-		return this.request( this.url, params, on_resp, on_error, on_progress );
+		return this.request( this.server_url, params, on_resp, on_error, on_progress );
 
 	function on_resp(resp)
 	{
@@ -595,31 +713,19 @@ Session.prototype.uploadFile = function( unit, folder, filename, data, category,
 	}
 }
 
-Session.prototype.uploadFileByPath = function( fullpath, data, category, on_complete, on_error, on_progress )
+Session.prototype.updateFilePreview = function( fullpath, preview, on_complete, on_error )
 {
-	var info = LFS.parsePath( fullpath );
-	return this.uploadFile( info.unit, info.folder, info.filename, data, category, on_complete, on_error, on_progress );
-}
+	//resolve encoding
+	var encoding = "";
+	if( data.constructor == ArrayBuffer )
+	{
+		data = new Blob([data.data], {type: "application/octet-binary"});
+		encoding = "file";
+	}
+	else if( typeof(data) != "string" )
+		encoding = "file";
 
-Session.prototype.deleteFile = function( fullpath, on_complete, on_error )
-{
-	return this.request( this.url,{ action: "files/deleteFile", fullpath: fullpath }, function(resp){
-
-		if(resp.status != 1)
-		{
-			if(on_error)
-				on_error(resp.msg);
-			return;
-		}
-
-		if(on_complete)
-			on_complete(resp.status == 1, resp);
-	}, on_error );
-}
-
-Session.prototype.updateFileContent = function( fullpath, data, on_complete, on_error )
-{
-	return this.request( this.url,{ action: "files/updateFile", fullpath: fullpath, data: data }, function(resp){
+	return this.request( this.server_url,{ action: "files/updateFile", fullpath: fullpath, data: data, encoding: encoding }, function(resp){
 
 		if(resp.status != 1)
 		{
@@ -633,9 +739,19 @@ Session.prototype.updateFileContent = function( fullpath, data, on_complete, on_
 	}, on_error );
 }
 
-Session.prototype.moveFile = function( fullpath, new_fullpath, on_complete, on_error )
+Session.prototype.updateFileContent = function( fullpath, data, on_complete, on_error )
 {
-	return this.request( this.url,{ action: "files/moveFile", fullpath: fullpath, new_fullpath: new_fullpath }, function(resp){
+	//resolve encoding
+	var encoding = "";
+	if( data.constructor == ArrayBuffer )
+	{
+		data = new Blob([data.data], {type: "application/octet-binary"});
+		encoding = "file";
+	}
+	else if( typeof(data) != "string" )
+		encoding = "file";
+
+	return this.request( this.server_url,{ action: "files/updateFile", fullpath: fullpath, data: data, encoding: encoding }, function(resp){
 
 		if(resp.status != 1)
 		{
@@ -645,7 +761,56 @@ Session.prototype.moveFile = function( fullpath, new_fullpath, on_complete, on_e
 		}
 
 		if(on_complete)
-			on_complete(resp.data, resp);
+			on_complete(resp.data);
+	}, on_error );
+}
+
+Session.prototype.copyFile = function( fullpath, target_fullpath, on_complete, on_error )
+{
+	return this.request( this.server_url,{ action: "files/copyFile", fullpath: fullpath, target_fullpath: target_fullpath }, function(resp){
+
+		if(resp.status != 1)
+		{
+			if(on_error)
+				on_error(resp.msg);
+			return;
+		}
+
+		if(on_complete)
+			on_complete(resp.status, resp);
+	}, on_error );
+}
+
+Session.prototype.moveFile = function( fullpath, target_fullpath, on_complete, on_error )
+{
+	return this.request( this.server_url,{ action: "files/moveFile", fullpath: fullpath, target_fullpath: target_fullpath }, function(resp){
+
+		if(resp.status != 1)
+		{
+			if(on_error)
+				on_error(resp.msg);
+			return;
+		}
+
+		if(on_complete)
+			on_complete(resp.status, resp);
+	}, on_error );
+}
+
+
+Session.prototype.deleteFile = function( fullpath, on_complete, on_error )
+{
+	return this.request( this.server_url,{ action: "files/deleteFile", fullpath: fullpath }, function(resp){
+
+		if(resp.status != 1)
+		{
+			if(on_error)
+				on_error(resp.msg);
+			return;
+		}
+
+		if(on_complete)
+			on_complete(resp.status == 1, resp);
 	}, on_error );
 }
 

@@ -7,12 +7,12 @@ class FilesModule
 	private static $USER_UNIT_SALT = "this is my unit"; //salt used for the name of the new units (avoid people guessing unit names)
 	private static $MAX_UNITS_PER_USER = 5; 
 	private static $MAX_USERS_PER_UNIT = 10;
-	private static $DEFAULT_UNIT_SIZE = 1000000;
+	private static $DEFAULT_UNIT_SIZE = 5000000;
 	private static $MIN_UNIT_SIZE = 50000; //in bytes
 	private static $MAX_UNIT_SIZE = 100000000; //in bytes
 	private static $PREVIEW_IMAGE_SIZE = 128; //in pixels
 	private static $MAX_PREVIEW_FILE_SIZE = 50000;//in bytes
-	private static $RESTART_CODE = "doomsday"; //internal module restart password
+	//private static $RESTART_CODE = "doomsday"; //internal module restart password
 
 	//this is used to store the result of any call
 	public $result = null;
@@ -44,9 +44,10 @@ class FilesModule
 			case "getFolders":	$this->actionGetFolders(); break; //get folders tree
 			case "createFolder": $this->actionCreateFolder(); break; //create a folder
 			case "deleteFolder": $this->actionDeleteFolder(); break; //create a new unit
+			case "moveFolder": $this->actionMoveFolder(); break; //move folder
 			case "getFilesInFolder": $this->actionGetFilesInFolder(); break; //get files inside one folder
 			case "getFilesTree": $this->actionGetFilesTree(); break; //get all files info
-			case "searchByCategory": $this->actionSearchByCategory(); break; //get files matching a category
+			case "searchFiles": $this->actionSearchFiles(); break; //get files matching a search
 			case "getFileInfo": $this->actionGetFileInfo(); break; //get metainfo about one file
 			case "uploadFile": $this->actionUploadFile(); break; //upload a file
 			case "deleteFile": 	$this->actionDeleteFile(); break; //delete a file (by id)
@@ -75,10 +76,20 @@ class FilesModule
 		if(!$user) //result already filled in getTokenUser
 			return;
 
+		$units = $this->getUserUnits( $user->id );
+
+		if(isset($_REQUEST["folders"]) && $_REQUEST["folders"] == true)
+		{
+			foreach($units as $i => $unit)
+			{
+				 $unit->folders = $this->getFolders( $unit->name );
+			}
+		}
+
 		$this->result["msg"] = "retrieving units";
 		$this->result["status"] = 1;
 		$this->result["data_type"] = "units";
-		$this->result["data"] = $this->getUserUnits( $user->id );
+		$this->result["data"] = $units;
 	}
 
 	public function actionCreateUnit()
@@ -366,15 +377,14 @@ class FilesModule
 			return;
 		}
 
-		/* min units
-		$units = $this->getUserUnits($user->id);
+		// min units 
+		$units = $this->getUserUnits($user->id, true);
 		if(count($units) == 1)
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'problem deleting unit';
 			return;
 		}
-		*/
 
 		if( !$this->deleteUnit( $unit->id, true ))
 		{
@@ -708,6 +718,60 @@ class FilesModule
 		$this->result["status"] = 1;
 	}
 
+	public function actionMoveFolder()
+	{
+		$user = $this->getUserByToken();
+		if(!$user) //result already filled in getTokenUser
+			return;
+
+		$unit = null;
+		$folder = null;
+
+		if(!isset($_REQUEST["fullpath"]) || !isset($_REQUEST["target_fullpath"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		//check origin
+		$fullpath = $_REQUEST["fullpath"];
+		$folder_info = $this->parsePath( $_REQUEST["fullpath"] );
+		$origin_unit = $this->getUnitByName( $origin_info->unit, $user->id );
+		if(!$origin_unit || $origin_unit->mode == "READ")
+		{
+			$this->result["status"] = -1;
+			debug("actionMoveFolder check unit mode");
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+
+		//check privileges in destination unit
+		$target_fullpath = $_REQUEST["target_fullpath"];
+		$target_info = $this->parsePath( $target_fullpath );
+		$target_unit = $this->getUnitByName( $target_info->unit, $user->id );
+		if(!$target_unit || $target_unit->mode == "READ")
+		{
+			$this->result["status"] = -1;
+			debug("actionMoveFolder check unit mode");
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+		//MOVE
+		if( !$this->moveFolder( $target_info->unit . "/" . $target_info->folder, $folder_info->unit . "/" . $folder_info->folder) )
+		{
+			$this->result["msg"] = "folder cannot be moved";
+			$this->result["status"] = -1;
+			return;
+		}
+
+		$this->result["msg"] = "folder moved";
+		$this->result["unit"] = $this->getUnit( $target_unit->id );
+		$this->result["status"] = 1;
+	}
+
 	public function actionGetFilesInFolder()
 	{
 		$user = $this->getUserByToken();
@@ -754,10 +818,11 @@ class FilesModule
 		//remove private info
 		foreach($dbfiles as $i => $file)
 		{
+			$file->unit = $unit_name;
 			unset( $file->id );
 			unset( $file->author_id );
 			unset( $file->unit_id );
-			unset( $file->folder );
+			//unset( $file->folder );
 		}
 
 		$this->result["msg"] = "retrieving files";
@@ -768,20 +833,25 @@ class FilesModule
 	}
 
 
-	public function actionSearchByCategory()
+	public function actionSearchFiles()
 	{
 		$user = $this->getUserByToken();
 		if(!$user) //result already filled in getTokenUser
 			return;
 
-		if(!isset($_REQUEST["category"]))
+		$category = null;
+		$filename = null;
+
+		if(isset($_REQUEST["category"]))
+			$category = $_REQUEST["category"];
+		else if(isset($_REQUEST["filename"]))
+			$filename = $_REQUEST["filename"];
+		else
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'params missing';
 			return;
 		}
-
-		$category = addslashes($_REQUEST["category"]);
 
 		//get units of user
 		$units = $this->getUserUnits($user->id);
@@ -789,13 +859,18 @@ class FilesModule
 		$dbfiles = Array();
 		foreach($units as $i => $unit)
 		{
-			$found = $this->getFilesFromDBByCategory( $unit->id, $category );
-			foreach($founf as $j => $file)
+			if($category)
+				$found = $this->searchFilesFromDBByCategory( $unit->id, $category );
+			else
+				$found = $this->searchFilesFromDBByFilename( $unit->id, $filename );
+			foreach($found as $j => $file)
 			{
+				$file->unit = $unit->name;
+				unset($file->id);
 				unset($file->unit_id);
 				unset($file->author_id);
 			}
-			$dbfiles[$unit->name] = $found;
+			$dbfiles = array_merge($dbfiles, $found);
 		}
 		$this->result["msg"] = "retrieving files";
 		$this->result["status"] = 1;
@@ -823,7 +898,7 @@ class FilesModule
 		if(!$file)
 		{
 			$this->result["msg"] = "no file found";
-			$this->result["status"] = 0;
+			$this->result["status"] = 1;
 			return;
 		}
 
@@ -840,7 +915,27 @@ class FilesModule
 			return;
 
 		//"data" is not tested here because it could come in $_FILES
-		if(!isset($_REQUEST["unit"]) || !isset($_REQUEST["folder"]) || !isset($_REQUEST["filename"]) || !isset($_REQUEST["category"]))
+		$unit_name = "";
+		$folder = "";
+		$filename = "";
+		$fullpath = "";
+
+		if( isset($_REQUEST["fullpath"]) )
+		{
+			$path_info = $this->parsePath( $_REQUEST["fullpath"] );
+			$unit_name = $path_info->unit;
+			$folder = $path_info->folder;
+			$filename = $path_info->filename;
+			$fullpath = $path_info->fullpath;
+		}
+		else if(isset($_REQUEST["unit"]) && $_REQUEST["unit"] && isset($_REQUEST["folder"]) && isset($_REQUEST["filename"]) && $_REQUEST["filename"] )
+		{
+			$unit_name = $_REQUEST["unit"];
+			$folder = $_REQUEST["folder"];
+			$filename = $_REQUEST["filename"];
+			$fullpath =  $this->clearPathName( $unit_name . "/" . $folder . "/" . $filename );
+		}
+		else
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'params missing';
@@ -848,7 +943,7 @@ class FilesModule
 		}
 
 		//check unit
-		$unit = $this->getUnitByName( $_REQUEST["unit"], $user->id );
+		$unit = $this->getUnitByName( $unit_name, $user->id );
 		if(!$unit)
 		{
 			$this->result["status"] = -1;
@@ -954,19 +1049,21 @@ class FilesModule
 			$metadata = $_REQUEST["metadata"];
 
 		//clean up the path name
-		$folder =  $_REQUEST["folder"];
 		$path_info = pathinfo($folder);
 		$dirname = $path_info["dirname"];
 		$folder = $dirname . "/" . $path_info["basename"];
 		if( substr($folder, 0, 2) == "./" )
 			$folder = substr($folder, 2);
-		$filename = $_REQUEST["filename"];
 
-		//check space stuff
+		$category = "";
+		if(isset($_REQUEST["category"]))
+			$category = $_REQUEST["category"];
+
+		//check storage space stuff
 		$bytes = strlen( $data );
 		$unit_size = $unit->used_size;
 		$diff = $bytes; //difference in used space between before storing and after storing the file
-		if( $this->fileExist($fullpath) ) //file exist
+		if( $this->fileExist($fullpath) ) //file exist: overwrite
 		{
 			$old_file_size = $this->getFileSize( $fullpath );
 			$diff = $bytes - $old_file_size;
@@ -980,7 +1077,7 @@ class FilesModule
 		}
 
 		//store file
-		$file_id = $this->storeFile( $user->id, $unit->id, $folder, $filename, $data, $_REQUEST["category"], $metadata );
+		$file_id = $this->storeFile( $user->id, $unit->id, $folder, $filename, $data, $category, $metadata );
 		if($file_id == null)
 		{
 			$this->result["status"] = -1;
@@ -996,12 +1093,12 @@ class FilesModule
 		if($preview)
 		{
 			if( $this->updateFilePreview($file_id, $preview) )
-				debug("Saved thumbnail");
+				debug("Saved preview");
 		}
 		else if( isset($_REQUEST["generate_preview"]) )
 		{
 			if($this->generateFilePreview( $file_id ))
-				debug("Generated thumbnail");
+				debug("Generated preview");
 		}
 
 		$unit->used_size = $unit_size;
@@ -1010,6 +1107,7 @@ class FilesModule
 		$this->result["status"] = 1;
 		$this->result["msg"] = 'file saved';
 		$this->result["id"] = $file_id;
+		$this->result["fullpath"] = $fullpath;
 	}
 
 	public function actionDeleteFile()
@@ -1100,7 +1198,7 @@ class FilesModule
 
 		$fullpath = $file->fullpath;
 
-		if(!isset($_REQUEST["new_fullpath"]))
+		if(!isset($_REQUEST["target_fullpath"]))
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'params missing';
@@ -1125,8 +1223,8 @@ class FilesModule
 		}
 
 		//check privileges in destination unit
-		$newfile_info = $this->parsePath( $_REQUEST["new_fullpath"] );
-		$target_unit = $this->getUnitByName( $newfile_info->unit, $user->id );
+		$targetfile_info = $this->parsePath( $_REQUEST["target_fullpath"] );
+		$target_unit = $this->getUnitByName( $targetfile_info->unit, $user->id );
 		if(!$target_unit || $target_unit->mode == "READ")
 		{
 			$this->result["status"] = -1;
@@ -1136,7 +1234,7 @@ class FilesModule
 		}
 
 		//move file (from DB and HD)
-		if( !$this->moveFileById( $file->id, $target_unit->id, $newfile_info->folder, $newfile_info->filename ) )
+		if( !$this->moveFileById( $file->id, $target_unit->id, $targetfile_info->folder, $targetfile_info->filename ) )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = $this->last_error;
@@ -1144,7 +1242,7 @@ class FilesModule
 		}
 
 		//compute size
-		$target_fullpath = $target_unit->name . "/" . $newfile_info->folder . "/" . $newfile_info->filename;
+		$target_fullpath = $target_unit->name . "/" . $targetfile_info->folder . "/" . $targetfile_info->filename;
 		$filesize = $this->getFileSize( $target_fullpath );
 		if($filesize === false)
 		{
@@ -1167,6 +1265,102 @@ class FilesModule
 
 		//in case it has preview
 		$this->renamePreview( $fullpath, $target_fullpath );
+
+		$this->result["status"] = 1;
+		$this->result["msg"] = "file moved";
+		$this->result["unit"] = $unit;
+		$this->result["target_unit"] = $target_unit;
+		$this->result["last_error"] = $this->last_error;
+	}
+
+	public function actionCopyFile()
+	{
+		$user = $this->getUserByToken();
+		if(!$user) //result already filled in getTokenUser
+			return;
+
+		$file = null;
+
+		if(isset($_REQUEST["fullpath"]))
+			$file = $this->getFileInfoByFullpath( $_REQUEST["fullpath"] );
+		else if( isset($_REQUEST["file_id"]) )
+			$file = $this->getFileInfoById( intval($_REQUEST["file_id"]) );
+		else
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "params missing";
+			return;
+		}
+
+		$fullpath = $file->fullpath;
+
+		if(!isset($_REQUEST["target_fullpath"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		if(!$file)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "file not found";
+			return;
+		}
+
+		//check privileges in origin file
+		$unit = $this->getUnit( $file->unit_id, $user->id );
+		if(!$unit || $unit->mode == "READ")
+		{
+			$this->result["status"] = -1;
+			debug("actionMoveFile check unit mode");
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+		//check privileges in destination unit
+		$targetfile_info = $this->parsePath( $_REQUEST["target_fullpath"] );
+		$target_unit = $this->getUnitByName( $targetfile_info->unit, $user->id );
+		if(!$target_unit || $target_unit->mode == "READ")
+		{
+			$this->result["status"] = -1;
+			debug("actionMoveFile check unit mode");
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+		$target_fullpath = $target_unit->name . "/" . $targetfile_info->folder . "/" . $targetfile_info->filename;
+
+		//move file (from DB and HD)
+		$origin_filesize = $this->getFileSize( $fullpath );
+		$target_filesize = $this->getFileSize( $target_fullpath );
+		if(!$target_filesize)
+			$target_filesize = 0;
+		$diff_size = $origin_filesize - $target_filesize;
+
+		if( !$this->copyFileById( $file->id, $target_unit->id, $targetfile_info->folder, $targetfile_info->filename ) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = $this->last_error;
+			return;
+		}
+
+		//compute size
+		$filesize = $this->getFileSize( $target_fullpath );
+		if($filesize === false)
+		{
+			debug("ERROR, cannot find file size: " . $target_fullpath);
+			$this->result["status"] = -1;
+			$this->result["msg"] = "error moving file";
+			return;
+		}
+
+		//debug( $unit->id . " - " .  $target_unit->id );
+
+		//change quotas from one unit to another
+		$this->changeUnitUsedSize( $target_unit->id, $diff, true );
+
+		//in case it has preview
+		$this->copyPreview( $fullpath, $target_fullpath );
 
 		$this->result["status"] = 1;
 		$this->result["msg"] = "file moved";
@@ -1428,10 +1622,10 @@ class FilesModule
 
 		debug("Creating demo tree");
 
-		$this->storeFile($user->id, $unit->id, "", "root.txt", "this is an example file", "TEXT", "" );
-		$this->storeFile($user->id, $unit->id, "/test", "test.txt", "this is an example file", "TEXT", "" );
-		$this->storeFile($user->id, $unit->id, "/test/subfolder", "subtest.txt", "this is an example file", "TEXT", "" );
-		self::createFolder( $unit->name . "/empty_folder" );
+		//$this->storeFile($user->id, $unit->id, "", "root.txt", "this is an example file", "TEXT", "" );
+		//$this->storeFile($user->id, $unit->id, "/test", "test.txt", "this is an example file", "TEXT", "" );
+		//$this->storeFile($user->id, $unit->id, "/test/subfolder", "subtest.txt", "this is an example file", "TEXT", "" );
+		self::createFolder( $unit->name . "/projects" );
 	}
 
 	public function onUserDeleted($user)
@@ -1465,7 +1659,8 @@ class FilesModule
 		$info["max_units"] = self::$MAX_UNITS_PER_USER;
 		$info["extensions"] = VALID_EXTENSIONS;
 		$info["files_path"] = substr( FILES_PATH, -1 ) == "/" ? FILES_PATH : FILES_PATH . "/"; //ensure the last character is a slash
-		$info["pics_path"] = substr( PICS_PATH, -1 ) == "/" ? PICS_PATH : PICS_PATH . "/"; //ensure the last character is a slash
+		$info["preview_prefix"] = PREVIEW_PREFIX;
+		$info["preview_sufix"] = PREVIEW_SUFIX;
 	}
 
 	//remove extra slashes
@@ -1563,7 +1758,6 @@ class FilesModule
 
 		//create folder
 		$this->createFolder( $unit_name );
-		$this->createFolder( $unit_name . "/" . PICS_PATH );
 
 		//give privileges to user
 		if( !$this->setPrivileges( $unit_id, $user_id, "ADMIN" ) )
@@ -2020,6 +2214,38 @@ class FilesModule
 		return true;
 	}
 
+	public function moveFolder( $origin, $target )
+	{
+		if( strpos($origin, "..") != FALSE || strpos($target, "..") != FALSE )
+			return false;
+
+		/* TODO
+		$origin = addslashes($origin);
+
+		$usedsize = 0;
+
+		//delete previews
+		$files = $this->getFilesFromDB( $unit->id, $origin, true );
+		foreach( $files as $i => $file )
+		{
+			$fullpath = $unit->name . "/" . $file->folder . "/" . $file->filename;
+			$usedsize += $file->size;
+			$this->deletePreview($fullpath);
+		}
+
+		//remove files from DB
+		$database = getSQLDB();
+		$query = "DELETE FROM `".DB_PREFIX."files` WHERE (`folder` = '". $folder . "' OR `folder` = '". $folder . "/%') AND `unit_id` = " . intval($unit->id);
+		$result = $database->query( $query );
+
+		$this->changeUnitUsedSize( $unit->id, -$usedsize, true );
+
+		//delete folder
+		$this->delTree( $unit->name . "/" . $folder );
+		*/
+		return true;
+	}
+
 	//PREVIEW ***********************************************
 
 	public function updateFilePreview( $file_id, $fileData )
@@ -2036,12 +2262,12 @@ class FilesModule
 		$fileData = substr($fileData, strpos($fileData, ",")+1); //remove encoding info data
 		$fileData = base64_decode($fileData);
 
-		$tn_filename = base64_encode( $file_info->folder . "/" . $file_info->filename ) . ".jpg";
-		$tn_path = $file_info->unit_name . "/".PICS_PATH."/" . $tn_filename ;
+		$tn_filename = PREVIEW_PREFIX . $file_info->filename . PREVIEW_SUFIX;
+		$tn_path = $file_info->unit_name . "/" . $file_info->folder . "/" . $tn_filename;
 
 		if( !self::writeFile( $tn_path, $fileData ) )
 		{
-			debug("problem writing file");
+			debug("problem writing preview file");
 			return false;
 		}
 
@@ -2059,7 +2285,7 @@ class FilesModule
 		$realpath = self::getFilesFolderName() . "/" . $file_info->fullpath;
 		$info = pathinfo( $realpath ); //to extract extension
 
-		$thumbWidth =  self::$PREVIEW_IMAGE_SIZE;
+		$previewWidth =  self::$PREVIEW_IMAGE_SIZE;
 
 		$ext = strtolower($info['extension']);
 		$img = null;
@@ -2067,12 +2293,9 @@ class FilesModule
 		switch($ext)
 		{
 			case 'jpeg':
-			case 'jpg':
-				$img = imagecreatefromjpeg( $realpath );
-				break;
-			case 'png':
-				$img = imagecreatefrompng( $realpath );
-				break;
+			case 'jpg': $img = imagecreatefromjpeg( $realpath ); break;
+			case 'png':	$img = imagecreatefrompng( $realpath ); break;
+			case 'webp': $img = imagecreatefromwebp( $realpath ); break;
 			default:
 				return false;
 		}
@@ -2086,9 +2309,9 @@ class FilesModule
 		$width = imagesx( $img );
 		$height = imagesy( $img );
 
-		// calculate thumbnail size
-		$new_width = $thumbWidth;
-		$new_height = floor( $height * ( $thumbWidth / $width ) );
+		// calculate preview size
+		$new_width = $previewWidth;
+		$new_height = floor( $height * ( $previewWidth / $width ) );
 
 		// create a new temporary image
 		$tmp_img = imagecreatetruecolor( $new_width, $new_height );
@@ -2096,15 +2319,28 @@ class FilesModule
 		// copy and resize old image into new image 
 		imagecopyresized( $tmp_img, $img, 0, 0, 0, 0, $new_width, $new_height, $width, $height );
 
-		$picspath = $file_info->unit_name . "/" . PICS_PATH;
-		$tn_filename = base64_encode( $file_info->folder . "/" . $file_info->filename ) . ".jpg";
+		$picpath = $file_info->unit_name . "/" . $file_info->folder;
+		$tn_filename = PREVIEW_PREFIX . $file_info->filename . PREVIEW_SUFIX;
 
-		$tn_path = $this->getFilesFolderName() . "/" . $picspath . "/" . $tn_filename ;
+		$tn_path = $this->getFilesFolderName() . "/" . $picpath . "/" . $tn_filename ;
 
-		// save thumbnail into a file
-		if( !imagejpeg( $tmp_img, $tn_path ) )
+		// save preview into a file
+		$result = null;
+		if(PREVIEW_SUFIX == ".png")
+			$result = imagepng( $tmp_img, $tn_path );
+		else if(PREVIEW_SUFIX == ".jpg")
+			$result = imagejpeg( $tmp_img, $tn_path );
+		else if(PREVIEW_SUFIX == ".webp")
+			$result = imagewebp( $tmp_img, $tn_path );
+		else
 		{
-			debug("Error saving thumbnail: " . $tn_path );
+			debug("unsupported preview extension");
+			return false;
+		}
+
+		if( !$result )
+		{
+			debug("Error saving generated preview: " . $tn_path );
 			return false;
 		}
 		return true;
@@ -2118,20 +2354,45 @@ class FilesModule
 		$old_path_info = $this->parsePath( $old_fullpath );
 		$new_path_info = $this->parsePath( $new_fullpath );
 
-		$old_filename = base64_encode( $old_path_info->folder . "/" . $old_path_info->filename  ) . ".jpg";
-		$new_filename = base64_encode( $new_path_info->folder . "/" . $new_path_info->filename  ) . ".jpg";
+		$old_filename = $old_path_info->unit . "/" . $old_path_info->folder . "/" . PREVIEW_PREFIX . $old_path_info->filename . PREVIEW_SUFIX;
+		$new_filename = $new_path_info->unit . "/" . $new_path_info->folder . "/" . PREVIEW_PREFIX . $new_path_info->filename . PREVIEW_SUFIX;
 
-		//no thumbnail
-		if(!self::fileExist( $old_path_info->unit . "/".PICS_PATH."/" . $old_filename ) )
+		//no preview
+		if(!self::fileExist( $old_filename ) )
 		{
 			//debug( "'" . $old_path_info->folder . "''" . $old_path_info->filename ."'");
 			//debug("no preview found: " . $old_filename);
 			return false;
 		}
 
-		$result = self::moveFile( $old_path_info->unit . "/".PICS_PATH."/" . $old_filename, $new_path_info->unit . "/".PICS_PATH."/" . $new_filename );
+		$result = self::moveFile( $old_filename, $new_filename );
 		if(!$result)
 			debug("Problem moving preview");
+		return $result;
+	}
+
+	public function copyPreview($old_fullpath, $new_fullpath )
+	{
+		if($old_fullpath == $new_fullpath)
+			return true;
+
+		$old_path_info = $this->parsePath( $old_fullpath );
+		$new_path_info = $this->parsePath( $new_fullpath );
+
+		$old_filename = $old_path_info->unit . "/" . $old_path_info->folder . "/" . PREVIEW_PREFIX . $old_path_info->filename . PREVIEW_SUFIX;
+		$new_filename = $new_path_info->unit . "/" . $new_path_info->folder . "/" . PREVIEW_PREFIX . $new_path_info->filename . PREVIEW_SUFIX;
+
+		//no preview
+		if(!self::fileExist( $old_filename ) )
+		{
+			//debug( "'" . $old_path_info->folder . "''" . $old_path_info->filename ."'");
+			//debug("no preview found: " . $old_filename);
+			return false;
+		}
+
+		$result = self::copyFile( $old_filename, $new_filename );
+		if(!$result)
+			debug("Problem copying preview");
 		return $result;
 	}
 
@@ -2139,15 +2400,15 @@ class FilesModule
 	{
 		$path_info = $this->parsePath( $fullpath, true );
 
-		$filename = base64_encode( $path_info->fullpath ) . ".jpg";
+		$filename = $path_info->unit . "/" . $path_info->folder . "/" . PREVIEW_PATH . $path_info->fullpath . PREVIEW_SUFIX;
 
-		//no thumbnail
-		if(!$this->fileExist( $path_info->unit . "/".PICS_PATH."/" . $filename ) )
+		//no preview
+		if(!$this->fileExist( $filename ) )
 			return false;
 
-		$result = self::deleteFile( $path_info->unit . "/".PICS_PATH."/" . $filename );
+		$result = self::deleteFile( $filename );
 		if(!$result)
-			debug("Problem deleting preview: " .  $path_info->unit . "/".PICS_PATH."/" . $filename );
+			debug("Problem deleting preview: " .  $filename );
 		return $result;
 	}
 
@@ -2456,10 +2717,7 @@ class FilesModule
 	public function getFolders( $unit_name )
 	{
 		$folder = self::getFilesFolderName() . "/" . $unit_name . "/";
-		//debug($folder);
 		$folders = $this->getSubfolders( $folder );
-
-		unset($folders[ PICS_PATH ]);
 		return $folders;
 	}
 
@@ -2552,6 +2810,20 @@ class FilesModule
 		}
 		return false;
 		*/
+	}
+
+	public static function copyFile($old, $new)
+	{
+		if( !is_file( self::getFilesFolderName() . "/" . $old ) )
+		{
+			debug("File not found in HD: " . self::getFilesFolderName() . "/" . $old );
+			return false;
+		}
+
+		$result = copy( self::getFilesFolderName() . "/" .  $old, self::getFilesFolderName() . "/" . $new );
+		if(!$result)
+			debug("File cannot be copyed to : " . self::getFilesFolderName() . "/" . $new );
+		return $result;
 	}
 
 	//also works for renaming
@@ -2666,12 +2938,31 @@ class FilesModule
 		return $files;		
 	}
 
-	public function getFilesFromDBByCategory($unit_id, $category)
+	public function searchFilesFromDBByFilename($unit_id, $wildcard, $limit = 50, $offset = 0)
+	{
+		$wildcard = addslashes($wildcard);
+
+		$database = getSQLDB();
+		$query = "SELECT * FROM `".DB_PREFIX."files` WHERE `filename` = '" . $wildcard . "' AND unit_id = ".intval($unit_id) . " LIMIT " . intval($offset) . "," . intval($limit);
+		//debug($query);
+
+		$result = $database->query( $query );
+		if (!$result) 
+			return null;
+
+		$files = Array();
+		while($file = $result->fetch_object())
+			$files[] = $file;
+
+		return $files;		
+	}
+
+	public function searchFilesFromDBByCategory($unit_id, $category, $limit = 50, $offset = 0)
 	{
 		$category = addslashes($category);
 
 		$database = getSQLDB();
-		$query = "SELECT * FROM `".DB_PREFIX."files` WHERE `category` = '" . $category . "' AND unit_id = ".intval($unit_id);
+		$query = "SELECT * FROM `".DB_PREFIX."files` WHERE `category` = '" . $category . "' AND unit_id = ".intval($unit_id) . " LIMIT " . intval($offset) . "," . intval($limit);
 		//debug($query);
 
 		$result = $database->query( $query );

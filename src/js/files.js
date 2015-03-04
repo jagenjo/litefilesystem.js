@@ -52,7 +52,13 @@ $("#newfile-dialog .submit-button").click(function(e){
 		return;
 
 	var values = getFormValues( $("#newfile-dialog .form-newfile") );
-		session.uploadFile( current_unit, current_folder, values.filename, values.filecontent, "TEXT", function(){
+		session.uploadFile( LFS.getFullpath( current_unit, current_folder, values.filename ), values.filecontent, "TEXT", function(v){
+			if(!v)
+			{
+				bootbox.alert("Error creating file");
+				return;
+			}
+
 			bootbox.alert("File uploaded");
 			refreshFiles(current_unit + "/" + current_folder);
 		}, function(err){

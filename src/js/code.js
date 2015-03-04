@@ -8,10 +8,11 @@ var current_folder = "";
 
 //start up
 $(".startup-dialog").show();
-LiteFileServer.checkServer( function(resp) {
+
+LiteFileServer.setup("", function(status, resp) {
 	console.log("server checked");
 	$(".startup-dialog").hide();
-	if(resp.status == 1)
+	if(status == 1)
 	{
 		system_info = resp.info;
 		console.log("Server ready");
@@ -20,7 +21,7 @@ LiteFileServer.checkServer( function(resp) {
 	else
 	{
 		console.warn("Server not ready");
-		if(resp.status == -10)
+		if(status == -10)
 			$(".warning-dialog .content").html("LiteFileServer config file not configured, please, check the <strong>config.sample.php</strong> file in includes and after configure it change the name to <strong>config.php</strong>.");
 		else
 			$(".warning-dialog .content").html("LiteFileServer database not found, please run the <a href='install.php'>install.php</a>.");
@@ -150,15 +151,14 @@ function onSessionExpired()
 	$(".dashboard").hide();
 }
 
-function showUploadFile( unit, folder, filename, data )
+function showUploadFile( unit, folder, filename, file )
 {
 	var progress_element = $(".footer-info .upload-progress.template").clone();
 	progress_element.removeClass("template");
 	progress_element.find(".filename").html( filename );
 	$(".footer-info").append( progress_element );
 
-	session.uploadFile( unit, folder, filename, data, "UNKNOWN", function(status, resp){
-		//bootbox.alert("File uploaded");
+	session.uploadFile( LFS.getFullpath(unit, folder, filename), file, file.type , function(status, resp){
 		refreshFiles( unit + "/" + folder );
 		if(resp.unit)
 			refreshUnitInfo( resp.unit );
@@ -441,7 +441,7 @@ function refreshFiles( fullpath, on_complete )
 			if(filesview_mode == "thumbnails")
 			{
 				var img = new Image();
-				img.src = LFS.getThumbPath( file.fullpath );
+				img.src = LFS.getPreviewPath( file.fullpath );
 				img.onerror = function() { this.parentNode.removeChild(this); };
 				$(item).append(img);
 			}
