@@ -86,6 +86,7 @@ function onDrag(e)
 files_table.addEventListener("dragover", function(e){ e.preventDefault(); return false;},false);
 files_table.addEventListener("drop", function(e) {
 	this.style.backgroundColor = "";
+
 	if (e.dataTransfer.files.length) //dragging file from HD
 	{
 		for(var i = 0; i < e.dataTransfer.files.length; i++)
@@ -93,11 +94,28 @@ files_table.addEventListener("drop", function(e) {
 			var file = e.dataTransfer.files[i];
 			showUploadFile( current_unit, current_folder, file.name, file );
 		}
-
-		e.preventDefault();
-		e.stopPropagation();
-		return true;
 	}
+	else if (e.dataTransfer.items.length) //dragging data from tab
+	{
+		for(var i = 0; i < e.dataTransfer.items.length; i++)
+		{
+			var item = e.dataTransfer.items[i];
+			if(item.type != "text/uri-list")
+				continue;
+			var url = e.dataTransfer.getData( item.type );
+			if(url.substr(0,7) != "http://")
+				continue;
+
+			var file_info = LFS.parsePath( url );
+
+			if(file_info.filename)
+				showUploadRemoteFile( current_unit, current_folder, file_info.filename, url );
+		}
+	}
+
+	e.preventDefault();
+	e.stopPropagation();
+	return true;
 });
 
 //CHANGE FILES VIEW

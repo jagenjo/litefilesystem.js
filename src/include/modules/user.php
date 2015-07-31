@@ -47,8 +47,12 @@ class UsersModule
 			$this->actionAddRole();
 		else if ($action == "setPassword")
 			$this->actionSetPassword();
+		else if ($action == "getInfo")
+			$this->actionGetUserInfo();
 		else if ($action == "exist")
 			$this->actionIsUser();
+		else if ($action == "setSpace")
+			$this->actionSetUserSpace();
 		else
 		{
 			//nothing
@@ -303,6 +307,83 @@ class UsersModule
 
 		$this->result["status"] = 1;
 		$this->result["msg"] = 'user deleted';
+	}
+
+	public function actionGetUserInfo()
+	{
+		$user = $this->actionValidateToken(true);
+		if(!$user)
+			return;
+
+		if( !$user->roles["admin"] )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "you can't do that";
+			return;
+		}
+
+		if(!isset($_REQUEST["username"]) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$user = $this->getUserByName($_REQUEST["username"]);
+
+		if (!$user)
+		{
+			$this->result["status"] = 0;
+			$this->result["msg"] = 'no user found';
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["data"] = $user;
+		$this->result["msg"] = 'user found';
+	}
+
+	public function actionSetUserSpace()
+	{
+		$user = $this->actionValidateToken(true);
+		if(!$user)
+			return;
+
+		if( !$user->roles["admin"] )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "you can't do that";
+			return;
+		}
+
+		if(!isset($_REQUEST["username"]) || !isset($_REQUEST["space"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$user = $this->getUserByName($_REQUEST["username"]);
+
+		if (!$user)
+		{
+			$this->result["status"] = 0;
+			$this->result["msg"] = 'no user found';
+			return;
+		}
+
+		$space = intval($_REQUEST["space"]);
+
+		if( !$this->setUserMaxSpace( $user->id , $space ) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "problem changing user space";
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["data"] = intval($space);
+		$this->result["msg"] = 'space changed';
 	}
 
 	public function actionChangePassword()

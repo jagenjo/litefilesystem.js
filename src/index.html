@@ -211,7 +211,7 @@
 <div id="setup-unit-dialog" class="modal fade">
    <div class="modal-dialog">
     <div class="modal-content">
-      <form class="form-newfile">
+      <form>
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
        <h2 class="form-signin-heading">Configure Unit</h2>
@@ -366,7 +366,7 @@
 
 					<div>
 						<a href="#" class="new-account text-center btn btn-lg btn-primary btn-block ladda-button" data-dismiss="modal" data-toggle="modal" data-target="#signup-dialog">Create an account </a>
-						<a href="#" class="get-user-account text-center btn btn-lg btn-primary btn-block ladda-button">Get user profile</a>
+						<a href="#" class="get-user-account text-center btn btn-lg btn-primary btn-block ladda-button"  data-dismiss="modal" data-toggle="modal" data-target="#userinfo-dialog">Get user profile</a>
 
 					</div>
 					<a href="#" class="pull-right need-help" type="button" data-dismiss="modal">Close</a><span class="clearfix"></span>
@@ -376,6 +376,56 @@
 		</div>
 	</div>
 </div>
+
+<div id="userinfo-dialog" class="modal fade">
+   <div class="modal-dialog">
+    <div class="modal-content">
+      <form>
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+       <h2 class="form-signin-heading">User info</h2>
+      </div>
+      <div class="modal-body">
+		<div class="row">
+			<div class="col-lg-12">
+			<div class="input-group">
+			  <input type="text" class="usernameInput form-control" placeholder="Search for...">
+			  <span class="input-group-btn">
+				<button class="search-user-button btn btn-default btn-primary" type="button">Go!</button>
+			  </span>
+			</div><!-- /input-group -->
+		  </div><!-- /.col-lg-6 -->
+		</div><!-- /.row -->
+
+		<div style="margin-top: 20px">
+			<div class="form-group">
+				<label for="exampleInputUsername">Username</label>
+				<input type="text" class="user-name form-control" id="exampleInputUsername">
+			</div>
+			<div class="form-group">
+				<label for="exampleInputEmail">Email address</label>
+				<input type="email" class="user-email form-control" id="exampleInputEmail" placeholder="Enter email">
+			</div>
+			<div class="form-group">
+				<label for="exampleInputSpace">Total Space</label>
+				<div class="input-group">
+				  <input type="text" class="user-totalspace usernameInput form-control" placeholder="Total space">
+				  <span class="input-group-btn">
+					<button class="savespace-user-button btn btn-default btn-primary" type="button">Save</button>
+				  </span>
+				</div><!-- /input-group -->
+			</div>
+		</div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="delete-user-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete Account</span></button>
+        <button class="save-unit-setup-button btn btn-lg btn-primary ladda-button" data-style="slide-up" data-color="green"><span class="ladda-label">Save</span></button>
+      </div>
+      </form>
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
 
 
 

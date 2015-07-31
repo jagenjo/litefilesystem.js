@@ -97,7 +97,7 @@ function systemReady()
 	});
 
 	//DELETE
-	$(".delete-account-button").click( function(e) {
+	$("#profile-dialog .delete-account-button").click( function(e) {
 
 		bootbox.prompt("Are you sure you want to delete your account? If you want to continue you must enter your account password", function(v){
 			if(!v)
@@ -111,8 +111,36 @@ function systemReady()
 		});
 	});
 
+	//ADMIN
+	$("#userinfo-dialog .search-user-button").click( function(e) {
+		var username = $("#userinfo-dialog .usernameInput").val();
+		if(!username)
+			return;
 
+		session.getUserInfo( username, function(user, resp) { 
+			if(!user)
+			{
+				$("#userinfo-dialog .user-name").val( "" );
+				$("#userinfo-dialog .user-email").val( "" );
+				$("#userinfo-dialog .user-totalspace").val( "" );
+				return;
+			}
 
+			$("#userinfo-dialog .user-name").val( user.username );
+			$("#userinfo-dialog .user-email").val( user.email );
+			$("#userinfo-dialog .user-totalspace").val( user.total_space );
+		});
+	});
+
+	$("#userinfo-dialog .savespace-user-button").click( function(e) {
+	
+		var username = $("#userinfo-dialog .user-name").val();
+		var total = $("#userinfo-dialog .user-totalspace").val();
+		if(!username || !total)
+			return;
+
+		session.setUserSpace( username, total );
+	});
 
 	//check existing session
 	LiteFileServer.checkExistingSession( function( server_session ) {
@@ -174,6 +202,16 @@ function showUploadFile( unit, folder, filename, file )
 		progress_element.find(".progress-bar").css("width", ((f * 100)|0) + "%");
 	});
 }
+
+function showUploadRemoteFile( unit, folder, filename, url )
+{
+	session.uploadRemoteFile( url, LFS.getFullpath(unit, folder, filename), function(status, resp) {
+		refreshFiles( unit + "/" + folder );
+		if(resp.unit)
+			refreshUnitInfo( resp.unit );
+	});
+}
+
 
 function sessionExpired()
 {

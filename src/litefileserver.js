@@ -47,6 +47,9 @@ var LiteFileServer = {
 				session.setToken(resp.session_token);
 			if(on_complete)
 				on_complete(session, resp);
+
+			if(LFS.onNewSession)
+				LFS.onNewSession(session);
 		});
 
 		return session;
@@ -95,9 +98,13 @@ var LiteFileServer = {
 				session.user = resp.user;
 				session.token = old_token;
 				on_complete(session);
+				if(LFS.onNewSession)
+					LFS.onNewSession(session);
 			}
 			else
 				on_complete(null);
+
+
 		});
 	},
 
@@ -173,7 +180,7 @@ var LiteFileServer = {
 		xhr.onload = function()
 		{
 			var response = this.response;
-			console.log(params.action);
+			//console.log(params.action);
 			if(this.status < 200 || this.status > 299)
 			{
 				if(on_error)
@@ -211,7 +218,7 @@ var LiteFileServer = {
 				var progress = 0;
 				if (e.lengthComputable)
 					progress = e.loaded / e.total;
-				on_progress(progress, e);
+				on_progress(progress, e, params);
 			}, false);
 
 		xhr.send(formdata);
@@ -244,6 +251,12 @@ var LiteFileServer = {
 	parsePath: function(fullpath, is_folder)
 	{
 		fullpath = this.clearPath(fullpath); //remove slashes
+
+		//remove url stuff
+		var pos = fullpath.indexOf("?");
+		if(pos != -1)
+			fullpath = fullpath.substr(0,pos);
+
 		var t = fullpath.split("/");
 		if(t.length < 2)
 			return { unit: is_folder ? fullpath : "",folder:"", filename: is_folder ? "" : fullpath, fullpath: fullpath };
@@ -358,6 +371,24 @@ Session.prototype.deleteAccount = function( password, on_complete )
 	return this.request( this.server_url,{action: "user/delete", username: this.user.username, password: password }, function(resp){
 		if(on_complete)
 			on_complete(resp.status == 1, resp);
+	});
+}
+
+Session.prototype.getUserInfo = function( username, on_complete )
+{
+	var that = this;
+	return this.request( this.server_url,{action: "user/getInfo", username: username }, function(resp){
+		if(on_complete)
+			on_complete(resp.data, resp);
+	});
+}
+
+Session.prototype.setUserSpace = function( username, space, on_complete )
+{
+	var that = this;
+	return this.request( this.server_url,{action: "user/setSpace", username: username, space: space }, function(resp){
+		if(on_complete)
+			on_complete(resp.status, resp);
 	});
 }
 
@@ -655,23 +686,52 @@ Session.prototype.uploadFile = function( fullpath, data, extra, on_complete, on_
 {
 	var info = LFS.parsePath( fullpath );
 	var unit = info.unit;
+	if(!unit)
+	{
+		if(on_error)
+			on_error("Unit missing in file fullpath");
+		console.error("Unit missing in file fullpath");
+		return;
+	}
+
 	var folder = info.folder;
 	var filename = info.filename;
 
+	//check size
+	var max_size = LFS.system_info.max_filesize || 1000000;
+	var size = data.byteLength !== undefined ? data.byteLength : data.length;
+
+	if(size === undefined)
+		throw("Data is in unknown format type");
+
 	//resolve encoding
 	var encoding = "";
-	if( data.constructor == ArrayBuffer )
+	if( data.constructor === ArrayBuffer )
 	{
-		data = new Blob([data.data], {type: "application/octet-binary"});
+		data = new Blob([data], {type: "application/octet-binary"});
 		encoding = "file";
 	}
-	else if( typeof(data) != "string" )
+	else if( data.constructor === File || data.constructor === Blob )
+	{
+		size = data.size;
 		encoding = "file";
+	}
+	else if( data.constructor === String )
+		encoding = "string"
+	else
+		throw("Unknown data format, only string, ArrayBuffer, Blob and File supported");
+
+	if(size > max_size)
+	{
+		if(on_error)
+			on_error('File too large (limit of ' + (max_size/(1024*1024)).toFixed(1) + ' MBs).');
+		return;
+	}
 
 	var ext = filename.split('.').pop().toLowerCase();
-	var extensions = ["png","jpg","jpeg"];
+	var extensions = ["png","jpg","jpeg","webp"]; //generate previews of this formats
 
-	var params = { action: "files/uploadFile", unit: unit, folder: folder, filename: filename, encoding: encoding, data: data };
+	var params = { action: "files/uploadFile", unit: unit, folder: folder, filename: filename, encoding: encoding, data: data, extra: extra };
 	
 	if(extra)
 	{
@@ -689,6 +749,7 @@ Session.prototype.uploadFile = function( fullpath, data, extra, on_complete, on_
 
 	var that = this;
 
+	//generate preview and request if they are images
 	if(LFS.generate_preview && LFS.previews == "local" && extensions.indexOf(ext) != -1 )
 	{
 		LFS.generatePreview( data, function( prev_data ) {
@@ -713,19 +774,9 @@ Session.prototype.uploadFile = function( fullpath, data, extra, on_complete, on_
 	}
 }
 
-Session.prototype.updateFilePreview = function( fullpath, preview, on_complete, on_error )
+Session.prototype.uploadRemoteFile = function( url, fullpath, on_complete, on_error )
 {
-	//resolve encoding
-	var encoding = "";
-	if( data.constructor == ArrayBuffer )
-	{
-		data = new Blob([data.data], {type: "application/octet-binary"});
-		encoding = "file";
-	}
-	else if( typeof(data) != "string" )
-		encoding = "file";
-
-	return this.request( this.server_url,{ action: "files/updateFile", fullpath: fullpath, data: data, encoding: encoding }, function(resp){
+	return this.request( this.server_url,{ action: "files/uploadRemoteFile", fullpath: fullpath, url: url }, function(resp){
 
 		if(resp.status != 1)
 		{
@@ -735,12 +786,37 @@ Session.prototype.updateFilePreview = function( fullpath, preview, on_complete, 
 		}
 
 		if(on_complete)
-			on_complete(resp.data);
+			on_complete(resp.status == 1, resp);
+	}, on_error );
+}
+
+Session.prototype.updateFilePreview = function( fullpath, preview, on_complete, on_error )
+{
+	if( typeof(preview) != "string" )
+	{
+		console.error("Preview must be a string in base64 encoding");
+		return;
+	}
+
+	return this.request( this.server_url,{ action: "files/updateFilePreview", fullpath: fullpath, preview: preview }, function(resp){
+
+		if(resp.status != 1)
+		{
+			if(on_error)
+				on_error(resp.msg);
+			return;
+		}
+
+		if(on_complete)
+			on_complete(resp.status, resp);
 	}, on_error );
 }
 
 Session.prototype.updateFileContent = function( fullpath, data, on_complete, on_error )
 {
+	if(fullpath.substr(0,5) == "http://")
+		throw("LFS does not support full URLs as fullpath");
+
 	//resolve encoding
 	var encoding = "";
 	if( data.constructor == ArrayBuffer )
@@ -765,8 +841,34 @@ Session.prototype.updateFileContent = function( fullpath, data, on_complete, on_
 	}, on_error );
 }
 
+//info must be object with optional fields: metadata and category
+Session.prototype.updateFileInfo = function( fullpath, info, on_complete, on_error )
+{
+	if(fullpath.substr(0,5) == "http://")
+		throw("LFS does not support full URLs as fullpath");
+
+	if(typeof(info) == "object")
+		info = JSON.stringify(info);
+
+	return this.request( this.server_url, { action: "files/updateFileInfo", fullpath: fullpath, info: info }, function(resp){
+
+		if(resp.status != 1)
+		{
+			if(on_error)
+				on_error(resp.msg);
+			return;
+		}
+
+		if(on_complete)
+			on_complete(resp.status == 1);
+	}, on_error );
+}
+
 Session.prototype.copyFile = function( fullpath, target_fullpath, on_complete, on_error )
 {
+	if(fullpath.substr(0,5) == "http://")
+		throw("LFS does not support full URLs as fullpath");
+
 	return this.request( this.server_url,{ action: "files/copyFile", fullpath: fullpath, target_fullpath: target_fullpath }, function(resp){
 
 		if(resp.status != 1)
@@ -783,6 +885,10 @@ Session.prototype.copyFile = function( fullpath, target_fullpath, on_complete, o
 
 Session.prototype.moveFile = function( fullpath, target_fullpath, on_complete, on_error )
 {
+	if(fullpath.substr(0,5) == "http://")
+		throw("LFS does not support full URLs as fullpath");
+
+
 	return this.request( this.server_url,{ action: "files/moveFile", fullpath: fullpath, target_fullpath: target_fullpath }, function(resp){
 
 		if(resp.status != 1)
@@ -797,9 +903,11 @@ Session.prototype.moveFile = function( fullpath, target_fullpath, on_complete, o
 	}, on_error );
 }
 
-
 Session.prototype.deleteFile = function( fullpath, on_complete, on_error )
 {
+	if(fullpath.substr(0,5) == "http://")
+		throw("LFS does not support full URLs as fullpath");
+
 	return this.request( this.server_url,{ action: "files/deleteFile", fullpath: fullpath }, function(resp){
 
 		if(resp.status != 1)

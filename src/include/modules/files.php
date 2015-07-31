@@ -11,7 +11,8 @@ class FilesModule
 	private static $MIN_UNIT_SIZE = 50000; //in bytes
 	private static $MAX_UNIT_SIZE = 100000000; //in bytes
 	private static $PREVIEW_IMAGE_SIZE = 128; //in pixels
-	private static $MAX_PREVIEW_FILE_SIZE = 50000;//in bytes
+	private static $MAX_PREVIEW_FILE_SIZE = 150000;//in bytes
+	private static $ALLOW_REMOTE_FILES = ALLOW_REMOTE_FILE_DOWNLOADING; //allow to download remote files
 	//private static $RESTART_CODE = "doomsday"; //internal module restart password
 
 	//this is used to store the result of any call
@@ -50,10 +51,10 @@ class FilesModule
 			case "searchFiles": $this->actionSearchFiles(); break; //get files matching a search
 			case "getFileInfo": $this->actionGetFileInfo(); break; //get metainfo about one file
 			case "uploadFile": $this->actionUploadFile(); break; //upload a file
+			case "uploadRemoteFile": $this->actionUploadRemoteFile(); break; //upload a file
 			case "deleteFile": 	$this->actionDeleteFile(); break; //delete a file (by id)
 			case "moveFile": $this->actionMoveFile(); break; //change a file (also rename)
 			case "updateFile": $this->actionUpdateFile(); break; //update a file with new content
-
 			case "updateFilePreview": $this->actionUpdateFilePreview(); break; //update file preview image
 			case "updateFileInfo":$this->actionUpdateFileInfo(); break; //update file meta info
 			//case "restart":	$this->actionRestart(); break; //delete all
@@ -1095,7 +1096,7 @@ class FilesModule
 			if( $this->updateFilePreview($file_id, $preview) )
 				debug("Saved preview");
 		}
-		else if( isset($_REQUEST["generate_preview"]) )
+		else if( isset($_REQUEST["generate_preview"]) && $_REQUEST["generate_preview"] )
 		{
 			if($this->generateFilePreview( $file_id ))
 				debug("Generated preview");
@@ -1109,6 +1110,166 @@ class FilesModule
 		$this->result["id"] = $file_id;
 		$this->result["fullpath"] = $fullpath;
 	}
+
+
+	public function actionUploadRemoteFile()
+	{
+		global $categories_by_type;
+		$user = $this->getUserByToken();
+		if(!$user) //result already filled in getTokenUser
+			return;
+
+		if(!self::$ALLOW_REMOTE_FILES)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'disabled';
+			return;
+		}
+
+		$unit_name = "";
+		$folder = "";
+		$filename = "";
+		$fullpath = "";
+
+		if( !isset($_REQUEST["url"]) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		if( isset($_REQUEST["fullpath"]) )
+		{
+			$path_info = $this->parsePath( $_REQUEST["fullpath"] );
+			$unit_name = $path_info->unit;
+			$folder = $path_info->folder;
+			$filename = $path_info->filename;
+			$fullpath = $path_info->fullpath;
+		}
+		else if(isset($_REQUEST["unit"]) && $_REQUEST["unit"] && isset($_REQUEST["folder"]) && isset($_REQUEST["filename"]) && $_REQUEST["filename"] )
+		{
+			$unit_name = $_REQUEST["unit"];
+			$folder = $_REQUEST["folder"];
+			$filename = $_REQUEST["filename"];
+			$fullpath =  $this->clearPathName( $unit_name . "/" . $folder . "/" . $filename );
+		}
+		else
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		//check unit
+		$unit = $this->getUnitByName( $unit_name, $user->id );
+		if(!$unit)
+		{
+			$this->result["status"] = -1;
+			debug("actionUploadFile getUnitByName");
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+		//check privileges
+		if(!$unit->mode || $unit->mode == "" || $unit->mode == "READ")
+		{
+			$this->result["status"] = -1;
+			debug("actionUploadFile check unit mode");
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+		$url = $_REQUEST["url"];
+		$url_info = $this->parsePath( $url );
+		if(!$this->validateExtension( $url_info->filename ) )
+		{
+			debug("Filename contains invalid extension: " . $url_info->filename);
+			$this->last_error = "Invalid url";
+			return null;
+		}
+
+		$file_data = $this->downloadFile($url);
+		if ( !$file_data )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'file not found';
+			return;
+		}
+
+		$data = $file_data->data;
+
+		$preview = null;
+		if( isset($_REQUEST["preview"]) )
+			$preview = $_REQUEST["preview"];
+
+		$metadata = "";
+		if(isset($_REQUEST["metadata"]))
+			$metadata = $_REQUEST["metadata"];
+
+		//clean up the path name
+		$path_info = pathinfo($folder);
+		$dirname = $path_info["dirname"];
+		$folder = $dirname . "/" . $path_info["basename"];
+		if( substr($folder, 0, 2) == "./" )
+			$folder = substr($folder, 2);
+
+		$category = "";
+		if(isset($_REQUEST["category"]))
+			$category = $_REQUEST["category"];
+		else if( isset($categories_by_type[  $file_data->type ] ) )
+			$category = $categories_by_type[  $file_data->type ];
+
+		//check storage space stuff
+		$bytes = strlen( $data );
+		$unit_size = $unit->used_size;
+		$diff = $bytes; //difference in used space between before storing and after storing the file
+		if( $this->fileExist($fullpath) ) //file exist: overwrite
+		{
+			$old_file_size = $this->getFileSize( $fullpath );
+			$diff = $bytes - $old_file_size;
+		}
+
+		if( $unit->used_size + $diff > $unit->total_size )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "Not enough free space";
+			return;
+		}
+
+		//store file: extension is validated inside
+		$file_id = $this->storeFile( $user->id, $unit->id, $folder, $filename, $data, $category, $metadata );
+		if($file_id == null)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = $this->last_error;
+			return;
+		}
+
+		//update unit used size
+		if(!$this->changeUnitUsedSize( $unit->id, $diff, true ))
+			debug("Something went wrong when changing used size: " . $diff);
+		$unit_size += $diff;
+
+		if($preview)
+		{
+			if( $this->updateFilePreview($file_id, $preview) )
+				debug("Saved preview");
+		}
+		else //if( isset($_REQUEST["generate_preview"]) && $_REQUEST["generate_preview"] )
+		{
+			if($this->generateFilePreview( $file_id ))
+				debug("Generated preview");
+		}
+
+		$unit->used_size = $unit_size;
+
+		$this->result["unit"] = $unit;
+		$this->result["status"] = 1;
+		$this->result["msg"] = 'file saved';
+		$this->result["id"] = $file_id;
+		$this->result["fullpath"] = $fullpath;
+	}
+
 
 	public function actionDeleteFile()
 	{
@@ -1443,7 +1604,7 @@ class FilesModule
 		//update metadata
 		if(isset($_REQUEST["metadata"]) && (!isset($info->metadata) || (isset($info->metadata) && $_REQUEST["metadata"] != $info->metadata)))
 		{
-			if( !$this->updateFileInfo($file->id, $_REQUEST["metadata"]) )
+			if( !$this->updateFileInfo($file->id, [ "metadata" => $_REQUEST["metadata"] ]) )
 			{
 				$this->result["status"] = -1;
 				$this->result["msg"] = $this->last_error;
@@ -1485,13 +1646,6 @@ class FilesModule
 		if(!$user) //result already filled in getTokenUser
 			return;
 
-		if(!isset($_REQUEST["preview"]) )
-		{
-			$this->result["status"] = -1;
-			$this->result["msg"] = 'params missing';
-			return;
-		}
-
 		//which file
 		$file = null;
 		if(isset($_REQUEST["fullpath"]))
@@ -1502,6 +1656,13 @@ class FilesModule
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = "params missing";
+			return;
+		}
+
+		if(!isset($_REQUEST["preview"]) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
 			return;
 		}
 
@@ -1527,6 +1688,7 @@ class FilesModule
 
 		if( !$this->updateFilePreview( $file->id, $_REQUEST["preview"]) )
 		{
+			debug("Error in updateFilePreview");
 			$this->result["status"] = -1;
 			$this->result["msg"] = $this->last_error;
 			return;
@@ -1542,14 +1704,17 @@ class FilesModule
 		if(!$user) //result already filled in getTokenUser
 			return;
 
-		if(!isset($_REQUEST["file_id"]) || !isset($_REQUEST["info"]) )
+		if(!isset($_REQUEST["fullpath"]) || !isset($_REQUEST["info"]) )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'params missing';
 			return;
 		}
 
-		if( !$this->updateFileInfo($_REQUEST["file_id"], $_REQUEST["info"], $user->id ) )
+		$file = $this->getFileInfoByFullpath( $_REQUEST["fullpath"] );
+		$info = json_decode( $_REQUEST["info"], true );
+
+		if( !$this->updateFileInfo( $file->id, $info, $user->id ) )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = $this->last_error;
@@ -1557,7 +1722,7 @@ class FilesModule
 		}
 
 		$this->result["status"] = 1;
-		$this->result["msg"] = "preview updated";
+		$this->result["msg"] = "info updated";
 	}
 
 	/*
@@ -1611,7 +1776,7 @@ class FilesModule
 	public function onUserCreated($user)
 	{
 		debug("Creating unit for user: " . $user->id);
-		$unit = $this->createUnit( $user->id, null, -1, $user->username . " unit" , true );
+		$unit = $this->createUnit( $user->id, $user->username, -1, $user->username . " unit" , true );
 		if(!$unit || !$unit->id )
 		{
 			debug("Error, unit not created","red");
@@ -1626,6 +1791,9 @@ class FilesModule
 		//$this->storeFile($user->id, $unit->id, "/test", "test.txt", "this is an example file", "TEXT", "" );
 		//$this->storeFile($user->id, $unit->id, "/test/subfolder", "subtest.txt", "this is an example file", "TEXT", "" );
 		self::createFolder( $unit->name . "/projects" );
+
+		if($user->id > 1) //everybody can read the public folder
+			$this->setPrivileges(0, $user->id, "READ");
 	}
 
 	public function onUserDeleted($user)
@@ -1655,6 +1823,11 @@ class FilesModule
 		$max_post = (int)(ini_get('post_max_size'));
 		$memory_limit = (int)(ini_get('memory_limit'));
 		$upload_mb = min($max_upload, $max_post, $memory_limit);
+
+		$info["upload_max_filesize"] = $max_upload;
+		$info["post_max_size"] = $max_post;
+		$info["memory_limit"] = $memory_limit;
+
 		$info["max_filesize"] = $upload_mb * 1024*1024;
 		$info["max_units"] = self::$MAX_UNITS_PER_USER;
 		$info["extensions"] = VALID_EXTENSIONS;
@@ -1675,6 +1848,10 @@ class FilesModule
 	{
 		$fullpath = $this->clearPathName($fullpath);
 
+		$pos = strpos($filename,"?");
+		if($pos != FALSE) //remove trailings url stuff
+			$fullpath = substr(0, $pos);
+	
 		$t = explode( "/", $fullpath );
 
 		$info = new stdClass();
@@ -1732,6 +1909,16 @@ class FilesModule
 		//generate random unit name
 		if(!$unit_name)
 			$unit_name = md5( self::$USER_UNIT_SALT . $user_id . time() . rand() );
+
+		//check if there is already a unit with that name
+		$query = "SELECT * FROM `".DB_PREFIX."units` WHERE `name` = " . addslashes($unit_name);
+		$database = getSQLDB();
+		$result = $database->query( $query );
+		if ($result === false || $result->num_rows != 0)
+		{
+			debug("unit already exists");
+			return null;
+		}
 
 		if($desc_name == "")
 			$desc_name = $unit_name;
@@ -2129,19 +2316,27 @@ class FilesModule
 			}
 
 			if(!$this->folderExist( $unit->name . "/" . $folder)) 
+			{
 				$this->createFolder( $unit->name . "/" . $folder );
+				if( !$this->folderExist( $unit->name . "/" . $folder ) )
+				{
+					debug("wrong folder name");
+					$this->last_error = "Error in Folder name";
+					return null;
+				}
+			}
 		}
 
 		//save file in hard drive
-		if ($this->writeFile($fullpath, $fileData) != true )
+		if ($this->writeFile( $fullpath, $fileData) != true )
 		{
-			debug("file couldnt be written");
+			debug( "file size is 0 after trying to write it to HD: " . $fullpath );
 			$this->last_error = "PROBLEM WRITTING FILE";
 			$query = "DELETE FROM `".DB_PREFIX."files` WHERE 'id' = " . $id;
 			$result = $database->query( $query );
 			if(!isset($database->affected_rows) || $database->affected_rows == 0)
 			{
-				debug("could remove the wrong file from the DB ?!?!");
+				debug("couldnt remove the file entry from the DB after writing the file to HD failed. ?!?!");
 				return null;
 			}
 			//TODO: recover unit size
@@ -2251,7 +2446,10 @@ class FilesModule
 	public function updateFilePreview( $file_id, $fileData )
 	{
 		if(strlen($fileData) > self::$MAX_PREVIEW_FILE_SIZE)
+		{
+			debug("preview size exceeds limit");
 			return false;
+		}
 
 		$file_id = intval($file_id);
 
@@ -2276,13 +2474,19 @@ class FilesModule
 
 	public function generateFilePreview( $file_id )
 	{
+		debug("generating preview");
+
 		$file_id = intval($file_id);
 		$file_info = $this->getFileInfoById($file_id);
 		if($file_info == null)
+		{
+			debug("cannot generate preview, file_id not found");
 			return false;
+		}
 
 		//direct path
-		$realpath = self::getFilesFolderName() . "/" . $file_info->fullpath;
+		$realpath = realpath( self::getFilesFolderName() . "/" . $file_info->fullpath );
+		debug("realpath: " . $realpath);
 		$info = pathinfo( $realpath ); //to extract extension
 
 		$previewWidth =  self::$PREVIEW_IMAGE_SIZE;
@@ -2297,12 +2501,13 @@ class FilesModule
 			case 'png':	$img = imagecreatefrompng( $realpath ); break;
 			case 'webp': $img = imagecreatefromwebp( $realpath ); break;
 			default:
+				debug("cannot preview, unknown extension: " . $ext );
 				return false;
 		}
 
 		if(!$img)
 		{
-			debug("Image couldnt be loaded: " . $file_info->fullpath );
+			debug("Image couldnt be loaded: " . $realpath );
 			return false;
 		}
 
@@ -2343,6 +2548,8 @@ class FilesModule
 			debug("Error saving generated preview: " . $tn_path );
 			return false;
 		}
+
+		debug("preview generated: " . $tn_path );
 		return true;
 	}
 
@@ -2412,29 +2619,42 @@ class FilesModule
 		return $result;
 	}
 
-	// File metadata ************************************
-
+	// File category and metadata ************************************
 	public function updateFileInfo($file_id, $info, $user_id = -1 )
 	{
 		$file_id = intval($file_id);
-		$info = addslashes($info);
-
 		$file_info = $this->getFileInfoById($file_id);
+
 		if($file_info == null)
 		{
 			$this->last_error = "WRONG ID";
 			return false;
 		}
 
+		$updates = Array();
+
+		if( isset( $info["metadata"] ) ) 
+			$updates[] = "`metadata` = '". addslashes( $info["metadata"] )."'";
+
+		if( isset( $info["category"] ) ) 
+			$updates[] = "`category` = '". addslashes( $info["category"] )."'";
+
+		if( count( $updates ) == 0 )
+			return false;
+
 		$filter = "";
 		if($user_id != -1)
-			$filter = " AND author = " . intval( $user_id ); 
+			$filter = " AND author_id = " . intval( $user_id ); 
 
 		$database = getSQLDB();
-		$query = "UPDATE `".DB_PREFIX."files` SET `metadata` = '".$info."' WHERE `id` = ".$file_id." ".$filter." LIMIT 1";
+		$query = "UPDATE `".DB_PREFIX."files` SET ". implode( $updates, "," ) ." WHERE `id` = ".$file_id." ".$filter." LIMIT 1";
+		debug($query);
 		$result = $database->query( $query );
 		if($database->affected_rows == 0)
+		{
+			debug("No changes when updating file info");
 			$this->last_error = "NO CHANGES";
+		}
 
 		return true;
 	}
@@ -2703,6 +2923,9 @@ class FilesModule
 		//create folders
 		$this->createFolder("");
 
+		//create public unit
+		$this->createUnit(1, "public", 1000*1024*1024, "Public");
+
 		debug("Files folder created");
 	}
 
@@ -2796,10 +3019,11 @@ class FilesModule
 
 	private static function writeFile($fullpath, $data)
 	{
-		$size = file_put_contents( self::getFilesFolderName() . "/" . $fullpath , $data );
-		if($size != 0)
-			return true;
-		return false;
+		$finalpath = self::getFilesFolderName() . "/" . $fullpath;
+		$result = file_put_contents( $finalpath , $data );
+		if($result === FALSE)
+			return false;
+		return true;
 		/*
 		$fp = fopen(  self::getFilesFolderName() . "/" . $fullpath , 'wb');
 		if ($fp)
@@ -2846,6 +3070,54 @@ class FilesModule
 		if ( is_file( self::getFilesFolderName() . "/" .  $filename ) )
 			return unlink( self::getFilesFolderName() . "/" . $filename );
 		return false;
+	}
+
+	public static function downloadFile($url)
+	{
+		$tmp_filename = tempnam(__DIR__ . "/../../tmp/","tmp");
+
+		//I use curl instead of curl or get_content because they dont seem safe enough
+		$fp = fopen ( $tmp_filename, 'w+'); 
+		if($fp == false)
+		{
+			debug("File cannot be opened: " . $tmp_filename);
+			return null;
+		}
+
+		$ch = curl_init( str_replace(" ","%20", $url) );//Here is the file we are downloading, replace spaces with %20
+		
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER , true);
+		curl_setopt($ch, CURLOPT_TIMEOUT, 50);
+		curl_setopt($ch, CURLOPT_FILE, $fp ); // write curl response to file
+		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+		curl_exec($ch); // get curl response
+		fclose($fp);
+
+		if(curl_errno($ch) != 0) //error found
+		{
+			$info = curl_getinfo($ch);
+			//var_dump( $info );
+			debug("CURL error: " . $info["http_code"] . " -> " . $url );
+			curl_close( $ch );
+			unlink( $tmp_filename );
+			return null;
+		}
+
+		$info = curl_getinfo($ch);
+
+		$file_data = new stdClass();
+		$file_data->size = intval( $info["download_content_length"] );
+		$file_data->type = trim( $info["content_type"] ); //could be useful
+
+		debug("Filetype: " . $file_data->type );
+
+		curl_close( $ch );
+
+		$file_data->data = file_get_contents( $tmp_filename );
+		unlink( $tmp_filename );
+		debug($tmp_filename);
+
+		return $file_data;
 	}
 
 	//************ DB *****************************
