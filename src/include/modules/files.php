@@ -1604,7 +1604,7 @@ class FilesModule
 		//update metadata
 		if(isset($_REQUEST["metadata"]) && (!isset($info->metadata) || (isset($info->metadata) && $_REQUEST["metadata"] != $info->metadata)))
 		{
-			if( !$this->updateFileInfo($file->id, [ "metadata" => $_REQUEST["metadata"] ]) )
+			if( !$this->updateFileInfo($file->id, Array( "metadata" => $_REQUEST["metadata"] ) ) )
 			{
 				$this->result["status"] = -1;
 				$this->result["msg"] = $this->last_error;
@@ -1911,12 +1911,15 @@ class FilesModule
 			$unit_name = md5( self::$USER_UNIT_SALT . $user_id . time() . rand() );
 
 		//check if there is already a unit with that name
-		$query = "SELECT * FROM `".DB_PREFIX."units` WHERE `name` = " . addslashes($unit_name);
+		$query = "SELECT * FROM `".DB_PREFIX."units` WHERE `name` = '" . addslashes($unit_name) . "'";
 		$database = getSQLDB();
 		$result = $database->query( $query );
 		if ($result === false || $result->num_rows != 0)
 		{
-			debug("unit already exists");
+			if($result === false)
+				debug("error in SELECT when checking if unit exist");
+			else
+				debug("unit already exists");
 			return null;
 		}
 

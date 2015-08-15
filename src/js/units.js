@@ -20,7 +20,8 @@ $("#new-unit-dialog .create-button").click(function(e){
 	if(!name)
 		return;
 	$("#new-unit-dialog").modal('hide');
-	var size = $("#new-unit-dialog .inputSize").slider('getValue');
+	var slider = $("#new-unit-dialog .inputSize")[0];
+	var size = slider.value; //$("#new-unit-dialog .inputSize").slider('getValue');
 	session.createUnit( name, size, function(unit, resp){
 		if(!unit)
 			bootbox.alert(resp.msg);
@@ -74,7 +75,8 @@ $(".save-unit-setup-button").click(function(e){
 
 	var metadata = units[ current_unit ].metadata;
 	metadata.name = $("#setup-unit-dialog .inputName").val();
-	var size = $("#setup-unit-dialog .inputSize").slider('getValue');
+	var slider = $("#setup-unit-dialog .inputSize")[0];
+	var size = slider.value; //.slider('getValue');
 
 	var info = {
 		metadata: metadata,
