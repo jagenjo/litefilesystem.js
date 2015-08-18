@@ -23,7 +23,7 @@ define('VALIDATE_ACCOUNTS', false ); //force people to validate the account once
 define('FILES_PATH','files/');  //folder where all the files will be stored
 define('PREVIEW_PREFIX','_th_'); //prefix added to the filename to designate a preview of a file
 define('PREVIEW_SUFIX','.jpg');  //sufix added to the filename of every preview
-define('VALID_EXTENSIONS','png,jpg,jpeg,bmp,txt,json,js,css,html,htm,ttf,otf');
+define('VALID_EXTENSIONS','png,jpg,jpeg,bmp,txt,json,js,css,html,htm,ttf,otf,wbin,dae');
 define('ALLOW_REMOTE_FILE_DOWNLOADING', false );  //allows to upload files that are not in this server
 
 //used to rename categories by file type
