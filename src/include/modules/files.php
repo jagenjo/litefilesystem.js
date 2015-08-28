@@ -11,7 +11,7 @@ class FilesModule
 	private static $MIN_UNIT_SIZE = 50000; //in bytes
 	private static $MAX_UNIT_SIZE = 100000000; //in bytes
 	private static $PREVIEW_IMAGE_SIZE = 128; //in pixels
-	private static $MAX_PREVIEW_FILE_SIZE = 150000;//in bytes
+	private static $MAX_PREVIEW_FILE_SIZE = 300000;//in bytes
 	private static $ALLOW_REMOTE_FILES = ALLOW_REMOTE_FILE_DOWNLOADING; //allow to download remote files
 	//private static $RESTART_CODE = "doomsday"; //internal module restart password
 
@@ -1834,6 +1834,7 @@ class FilesModule
 		$info["files_path"] = substr( FILES_PATH, -1 ) == "/" ? FILES_PATH : FILES_PATH . "/"; //ensure the last character is a slash
 		$info["preview_prefix"] = PREVIEW_PREFIX;
 		$info["preview_sufix"] = PREVIEW_SUFIX;
+		$info["preview_max_filesize"] = self::$MAX_PREVIEW_FILE_SIZE;
 	}
 
 	//remove extra slashes
