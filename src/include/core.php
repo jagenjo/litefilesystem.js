@@ -16,6 +16,11 @@ if($is_console && count($argv) > 1)
 	}
 }
 
+if( !$is_console )
+	$global_url = "http://" . $_SERVER["SERVER_NAME"] . "/" . $_SERVER["REQUEST_URI"];
+else
+	$global_url = "localhost/";
+
 
 //require global config vars
 if (!file_exists(__DIR__ . "/config.php"))

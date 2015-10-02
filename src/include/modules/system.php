@@ -29,7 +29,7 @@ class SystemModule
 		$this->result["debug"] = getDebugLog();
 
 		//the response is encoded in JSON on AJAX calls
-		print json_encode($this->result);
+		print json_encode( $this->result );
 	}
 
 	public function actionRestart()
@@ -100,6 +100,15 @@ class SystemModule
 		dispatchEventToModules("restart",$tmp); //create tables and folders
 		dispatchEventToModules("postRestart",$tmp); //fill stuff
 		debug("System restarted" );
+		return true;
+	}
+
+	public function upgradeSystem()
+	{
+		$tmp = Array();
+		debug("Upgrading system" );
+		dispatchEventToModules("upgrade",$tmp); //create tables and folders
+		debug("System upgraded" );
 		return true;
 	}
 

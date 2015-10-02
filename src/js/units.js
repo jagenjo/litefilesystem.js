@@ -52,18 +52,22 @@ $(".setup-unit-button").click(function(e){
 
 	$("#setup-unit-dialog .size-info").html( LFS.getSizeString( unit.used_size ) + " / " + LFS.getSizeString( unit.total_size ) );
 
-	refreshSlider(unit);
+	refreshSlider( unit );
 
 	refreshUnitSetup(current_unit);
 });
 
-function refreshSlider(unit)
+//updates the unit slider
+function refreshSlider( unit )
 {
 	var value = unit.total_size;
 	var unused = (unit.total_size - unit.used_size);
 	var min = 1024*1024;
 	var max = session.user.total_space - session.user.used_space + unit.total_size;
-	$("#setup-unit-dialog .inputSize").slider({min:min, max: max, step: 1024*1024, value: value, formatter: function(v){ 
+	if(max > system_info.unit_max_size)
+		max = system_info.unit_max_size;
+
+	$("#setup-unit-dialog .inputSize").slider({ min:min, max: max, step: 1024*1024, value: value, formatter: function(v){ 
 		return LFS.getSizeString(v);
 	}});
 }
@@ -76,12 +80,15 @@ $(".save-unit-setup-button").click(function(e){
 	var metadata = units[ current_unit ].metadata;
 	metadata.name = $("#setup-unit-dialog .inputName").val();
 	var slider = $("#setup-unit-dialog .inputSize")[0];
-	var size = slider.value; //.slider('getValue');
+	var size = parseInt(slider.value); //.slider('getValue');
 
 	var info = {
 		metadata: metadata,
 		total_size: size
-	}
+	};
+
+	if(size > system_info.unit_max_size)
+		size = system_info.unit_max_size;
 
 	session.setUnitInfo( current_unit, info, function(v,resp){
 		save_setup_ladda.stop();
@@ -107,7 +114,7 @@ function refreshUnitSetup( unit_name )
 
 
 		$("#setup-unit-dialog .unitname").html( unit_name );
-		refreshSlider(unit);
+		refreshSlider( unit );
 
 		root.empty();
 
@@ -119,7 +126,7 @@ function refreshUnitSetup( unit_name )
 			var row = template.clone();
 			row.removeClass("template");
 			row.find(".username").html( user.username );
-			row.find(".role").html( user.mode );
+			row.find(".role").html( user.mode == "ADMIN" ? "Administrator" : user.mode );
 			row[0].dataset["username"] = user.username;
 			row[0].dataset["unit"] = unit_name;
 

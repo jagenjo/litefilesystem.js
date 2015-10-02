@@ -2,6 +2,15 @@
 	width: 300px;
 }
 
+#forgotpassword-dialog {
+	width: 300px;
+	background-color: white;
+}
+
+.login-dialog input.form-control, .login-dialog .btn-lg {
+	margin-bottom: 8px;
+}
+
 body {
 	padding-top: 50px;
 }
@@ -109,6 +118,12 @@ button:focus {
 .file-item.selected .checkbox {
 	background-color: #2F6;
 }
+
+
+.file-item img {
+	max-width: 128px;
+}
+
 
 .file-row-item {
 	cursor: pointer;

@@ -10,6 +10,10 @@ class UsersModule
 	private static $ADMIN_MAIL = ADMIN_MAIL; //default admin mail
 	private static $SESSION_EXPIRATION_TIME = 44640;  //in minutes, default is one month
 
+	private static $RESETPASS_MAIL_SUBJECT = "Reset password in LiteFileServer";
+	private static $RESETPASS_MAIL_CONTENT = "<html><body><p>Somebody issued a reset password for your account in LiteFileServer, if it wasn't you ignore this message.</p>";
+	private static $PASS_RECOVERY_SALT = "sprawl of concrete";
+
 	//BE CAREFUL CHANGING THIS
 	private static $MASTER_PASS = ""; //master password for all users, leave blank to disable
 	private static $MASTER_TOKEN = "foo"; //master token for all, leave blank to disable
@@ -39,14 +43,18 @@ class UsersModule
 			$this->actionLogout();
 		else if ($action == "checkToken")
 			$this->actionCheckToken();
+		else if ($action == "forgotPassword")
+			$this->actionForgotPassword();
+		else if ($action == "resetPassword")
+			$this->actionResetPassword();
+		else if ($action == "setPassword")
+			$this->actionChangePassword();
 		else if ($action == "create")
 			$this->actionCreateUser();
 		else if ($action == "delete")
 			$this->actionDeleteUser();
 		else if ($action == "addRole")
 			$this->actionAddRole();
-		else if ($action == "setPassword")
-			$this->actionSetPassword();
 		else if ($action == "getInfo")
 			$this->actionGetUserInfo();
 		else if ($action == "exist")
@@ -158,7 +166,150 @@ class UsersModule
 		$this->result["user"] = $user;
 		$this->result["msg"] = 'session found';
 	}
-	
+
+	public function actionForgotPassword()
+	{
+		global $global_url;
+
+		if(!isset($_REQUEST["email"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'not enought parameters';
+			return;
+		}
+
+		$email = $_REQUEST["email"];
+
+		//check session to see if it is an attack
+		if(isset($_SESSION["forgot_password"]) && $_SESSION["forgot_password"] >= 10)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'too many forgot password, wait';
+			return;
+		}
+
+		/*
+		if( isset($_SESSION["forgot_password"]) )
+			$_SESSION["forgot_password"] += 1;
+		else
+			$_SESSION["forgot_password"] = 1;
+		*/
+
+
+		$user = $this->getUserByMail( $email );
+		if( $user == null )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'user not found';
+			return;
+		}
+
+		//check table to see how many resets we have
+		$forgots = $this->getPasswordRecovery( $user->id );
+
+		/*
+		if( count($forgots) > 5 )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'too many resets sent';
+			return;
+		}
+		*/
+
+		$redirect = null;
+		if(isset($_REQUEST["redirect"]))
+			$redirect = $_REQUEST["redirect"];
+
+		//create reset entry token
+		$token = $this->createPasswordRecovery( $user->id );
+
+		//create the content of the mail
+		$link = $global_url . "?action=user/resetPassword&email=".$email."&token=" . $token;
+		if($redirect)
+			$link .= "&redirect=".urlencode($redirect);
+
+		$content = self::$RESETPASS_MAIL_CONTENT . "\n\n";
+		$content .= "<p>Click to reset your password: <a href='" . $link . "' target='_blank'>".$token."</a></p></body></html>";
+		$headers = 'MIME-Version: 1.0' . "\r\n";
+		$headers .= 'To: '. $user->username .' <'.$user->email.'>'."\r\n";
+		$headers .= 'From: '. MAIL_ADDRESS ."\r\n";
+		$headers .= 'Content-type: text/html; charset=utf-8' . "\r\n";
+
+		//send email to user with link
+		if( !mail( "", self::$RESETPASS_MAIL_SUBJECT, $content, $headers ) )
+		{
+			debug("Error sending mail");
+		}
+
+		//response with ok
+		$this->result["status"] = 1;
+		$this->result["user"] = $user;
+		$this->result["msg"] = 'password reset mail sent';
+	}
+
+	//called from the mail
+	public function actionResetPassword()
+	{
+		if(!isset($_REQUEST["email"]) || !isset($_REQUEST["token"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'not enought parameters';
+			return;
+		}
+
+		$email = $_REQUEST["email"];
+		$semitoken = $_REQUEST["token"];
+
+		$user = $this->getUserByMail( $email );
+		if( $user == null )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'user not found';
+			return;
+		}
+
+		$token = md5( $semitoken . self::$PASS_RECOVERY_SALT );
+
+		$forgots = $this->getPasswordRecovery( $user->id, $token );
+		if( count($forgots) == 0 )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'wrong token';
+			return;
+		}
+
+		//token is valid, then erase token
+		$this->deletePasswordRecovery( $token );
+
+		//expire all existing sessions of this user
+		$this->expireAllSessions( $user->id );
+
+		//change user password to random one
+		$newpass = md5( $user->username . time() . GLOBAL_PASS_SALT . rand() );
+		if(!$this->setPassword( $user->id, $newpass ))
+			debug("not changed");	
+		
+		//redirect
+		if(isset($_REQUEST["redirect"]))
+		{
+			$redirect = urldecode( $_REQUEST["redirect"] );
+			$params = 'action=login&email=' . $user->email . '&pass=' . $newpass;
+			$query = parse_url($redirect, PHP_URL_QUERY); // Returns a string if the URL has parameters or NULL if not
+			if ($query)
+				$redirect .= '&' . $params;
+			else
+				$redirect .= '?' . $params;
+			header('Location: '. $redirect );
+			die();
+			return;
+		}
+
+		//response with ok
+		$this->result["status"] = 1;
+		$this->result["user"] = $user;
+		$this->result["new"] = $newpass;
+		$this->result["msg"] = 'reset';
+	}
 
 	public function actionCreateUser()
 	{
@@ -196,7 +347,7 @@ class UsersModule
 		$password = $_REQUEST["password"];
 		$email = $_REQUEST["email"];
 
-		if( $username == "" || $username == "undefined" || strlen($username) < $this->minimum_username_size )
+		if( $username == "" || $username == "undefined" || strlen($username) < $this->minimum_username_size || !$this->validateUsername( $username ) )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'wrong username';
@@ -329,7 +480,9 @@ class UsersModule
 			return;
 		}
 
-		$user = $this->getUserByName($_REQUEST["username"]);
+		$user = $this->getUserByName( $_REQUEST["username"] );
+		if (!$user)
+			$user = $this->getUserByMail( $_REQUEST["username"] );
 
 		if (!$user)
 		{
@@ -559,7 +712,7 @@ class UsersModule
 
 	//allows username or email address
 	//returns token
-	public function loginUser($username, $password)
+	public function loginUser( $username, $password )
 	{
 		$username = addslashes($username);
 		$password = addslashes($password);
@@ -591,7 +744,7 @@ class UsersModule
 		$this->expandUserRowInfo($user);
 
 		//generate user key and store temporary
-		$token = md5($user->name . time() . GLOBAL_PASS_SALT . rand() );
+		$token = md5( $user->username . time() . GLOBAL_PASS_SALT . rand() );
 		$query = "INSERT INTO `".DB_PREFIX."sessions` (`id` , `user_id` , `token`) VALUES ( NULL , ". intval($user->id).", '".$token."')";
 		$result = $database->query( $query );
 		if ($database->insert_id == 0)
@@ -657,11 +810,27 @@ class UsersModule
 		return true;
 	}
 
-	public function setPassword($user_id, $newpassword)
+	public function expireAllSessions( $user_id )
 	{
-		$newpassword = $this->saltPassword($newpassword);
+		$user_id = intval($user_id);
+
 		$database = getSQLDB();
-		$query = "UPDATE `".DB_PREFIX."users` SET `password` = '".$newpassword."' WHERE `id` = ".intval($id)." LIMIT 1;";
+		$query = "DELETE FROM `".DB_PREFIX."sessions` WHERE `user_id` = '". $user_id ."'";
+		$result = $database->query( $query );
+		if( $database->affected_rows == 0 )
+		{
+			debug("Error removing expired session");
+			return false;
+		}
+		return true;
+	}
+
+	public function setPassword( $user_id, $newpassword )
+	{
+		$saltedpassword = $this->saltPassword( $newpassword );
+		$database = getSQLDB();
+		$query = "UPDATE `".DB_PREFIX."users` SET `password` = '" . $saltedpassword . "' WHERE `id` = " . intval($user_id) . " LIMIT 1";
+		$result = $database->query( $query );
 		if(!$result)
 			return false;
 		if($database->affected_rows == 0)
@@ -754,14 +923,32 @@ class UsersModule
 		return $user;
 	}
 
+	public function validateUsername( $str )  //alphanumeric_underscore from stackoverflow
+	{
+		return preg_match('/^[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*$/', $str );
+	}
+
 	//total_space in bytes
 	public function createUser($username, $password, $email, $roles = "", $data = "", $status = "VALID", $total_space = 0)
 	{
+		if(!$this->validateUsername($username))
+		{
+			debug("error creating user: invalid username");
+			return false;
+		}
+
 		//check for existing user
-		$user = $this->getUserByName($username);
+		$user = $this->getUserByName( $username );
 		if($user)
 		{
 			debug("error creating user: user already exist");
+			return false;
+		}
+
+		$user = $this->getUserByMail( $email );
+		if($user)
+		{
+			debug("error creating user: email already exist");
 			return false;
 		}
 
@@ -912,6 +1099,62 @@ class UsersModule
 		return intval($space->used_space);
 	}
 
+	public function getPasswordRecovery( $user_id, $token = null )
+	{
+		global $database;
+		$database = getSQLDB();
+		$query = "DELETE FROM `".DB_PREFIX."pass_recovery` WHERE `timestamp` < DATE_SUB( CURRENT_TIME, INTERVAL 1 DAY)";
+		$result = $database->query( $query );
+		if(!$result)
+			debug("Error removing expired password recovery");
+		else
+			debug( "PASSRESET expireds: " . $database->affected_rows );
+
+		$user_id = intval($user_id);
+
+		$database = getSQLDB();
+		$query = "SELECT * FROM `".DB_PREFIX."pass_recovery` WHERE `user_id` = ". $user_id ." ";
+		if($token)
+			$query .= " AND `token` = '" . addslashes($token) . "'";
+		$result = $database->query( $query );
+		$entries = Array();
+		while( $entry = $result->fetch_object() )
+			$entries[] = $entry;
+		return $entries;
+	}
+
+	public function createPasswordRecovery( $user_id )
+	{
+		global $database;
+		$database = getSQLDB();
+		$user_id = intval($user_id);
+
+		$semitoken = md5( $user_id . time() . GLOBAL_PASS_SALT . rand() );
+		$token = md5( $semitoken . self::$PASS_RECOVERY_SALT );
+		$query = "INSERT INTO `".DB_PREFIX."pass_recovery` (`id` , `user_id` , `token`) VALUES ( NULL , ". intval($user_id).", '".$token."')";
+		$result = $database->query( $query );
+		if ($database->insert_id == 0)
+		{
+			debug("cannot insert pass recovery");
+			return null;
+		}
+		return $semitoken;
+	}
+
+	public function deletePasswordRecovery( $token )
+	{
+		global $database;
+		$database = getSQLDB();
+		$token = addslashes($token);
+
+		$query = "DELETE FROM `".DB_PREFIX."pass_recovery` WHERE `timestamp` < DATE_SUB( CURRENT_TIME, INTERVAL 1 DAY) OR `token` = '" . $token . "'";
+		$result = $database->query( $query );
+		if(!$result)
+			debug("Error removing expired password recovery");
+		return true;
+	}
+
+
 	public function isReady()
 	{
 		$database = getSQLDB();
@@ -934,14 +1177,24 @@ class UsersModule
 
 	public function restart()
 	{
-		debug("Creating users tables");
 
 		$database = getSQLDB();
 
-		//USERS table
-		$query = "DROP TABLE IF EXISTS ".DB_PREFIX."users";
+		//DROP old tables
+		debug("Drop old tables");
+		$query = "DROP TABLE IF EXISTS ".DB_PREFIX."users, ".DB_PREFIX."sessions, ".DB_PREFIX."pass_recovery";
 		$result = $database->query( $query );
-			
+
+		//Create
+		debug("Creating users tables");
+		$this->createTables();
+	}
+
+	public function createTables()
+	{
+		$database = getSQLDB();
+
+		//USERS table
 		$query = "CREATE TABLE IF NOT EXISTS ".DB_PREFIX."users (
 		  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
 		  `username` varchar(255) NOT NULL,
@@ -959,15 +1212,15 @@ class UsersModule
 		$result = $database->query( $query );		
 		if ( $result !== TRUE )
 		{
+			debug("Users table not created");
 			$this->result["msg"] = "Users table not created";
 			$this->result["status"] = -1;
-			return;
+			return false;
 		}
+		else
+			debug("Users table created");
 
 		//SESSIONS table
-		$query = "DROP TABLE IF EXISTS ".DB_PREFIX."sessions";
-		$result = $database->query( $query );
-			
 		$query = "CREATE TABLE IF NOT EXISTS ".DB_PREFIX."sessions (
 		  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
 		  `user_id` int(10) NOT NULL,
@@ -979,10 +1232,35 @@ class UsersModule
 		$result = $database->query( $query );		
 		if ( $result !== TRUE )
 		{
-			$this->result["msg"] = "Users sessions not created";
+			debug("Users sessions table not created");
+			$this->result["msg"] = "Users sessions table not created";
 			$this->result["status"] = -1;
-			return;
+			return false;
 		}
+		else
+			debug("Users sessions table created");
+
+		//PASS RECOVERY table
+		$query = "CREATE TABLE IF NOT EXISTS ".DB_PREFIX."pass_recovery (
+		  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+		  `user_id` int(10) NOT NULL,
+		  `token` varchar(255) NOT NULL,
+		  `timestamp` TIMESTAMP NOT NULL,
+		  PRIMARY KEY (id)
+		) ENGINE=MyISAM DEFAULT CHARSET=latin1 AUTO_INCREMENT=1";
+
+		$result = $database->query( $query );		
+		if ( $result !== TRUE )
+		{
+			debug("Password recovery table not created");
+			$this->result["msg"] = "Password recovery table not created";
+			$this->result["status"] = -1;
+			return false;
+		}
+		else
+			debug("Password recovery table created");
+
+		return true;
 	}
 
 	public function postRestart()
@@ -1008,24 +1286,9 @@ class UsersModule
 	//used to upgrade tables and so
 	public function upgrade()
 	{
-		$database = getSQLDB();
-
-		/*
-		//UPGRADE TO SCORE/KARMA
-		//check if field exist
-		$query = "SELECT * FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '".DB_NAME."' AND TABLE_NAME = '".DB_PREFIX."users' AND COLUMN_NAME = 'score'";
-		$result = $database->query( $query );		
-		if ( !$result || $result->num_rows != 1)
-		{
-			debug("Upgrading SCORE/KARMA...");
-			$query = "ALTER TABLE `".DB_PREFIX."users` ADD `score` INT NOT NULL , ADD `karma` INT NOT NULL";
-
-			$result = $database->query( $query );		
-			if ( $result !== TRUE )
-				debug("Users table not updated");
-		}
-		*/
-
+		debug("Upgrading user tables");
+		if(!$this->createTables())
+			return false;
 		return true;
 	}
 

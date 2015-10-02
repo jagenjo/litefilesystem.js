@@ -55,20 +55,35 @@
       <form class="form-signin">
         <h3 class="form-signin-heading">Please sign in</h3>
         <label for="inputEmail" class="sr-only">Email address or Username</label>
-        <input name="username" type="text" id="inputEmail" class="form-control" placeholder="Email address" value="guest" required autofocus>
-        <label for="inputPassword" class="sr-only">Password</label>
-        <input name="password" type="password" id="inputPassword" class="form-control" placeholder="Password" value="guest" required>
+        <input name="username" type="text" id="inputEmail" class="form-control" placeholder="Email address or Username" value="guest" required autofocus>
+
+		<label for="inputPassword" class="sr-only">Password</label>
+        <input name="password" type="password" id="inputPassword" class="form-control" placeholder="Password" value="guest" required />
+		<a href="#" class="text-center forgot-password" data-toggle="collapse" data-target="#forgotpassword-dialog">Forgot password?</a>
+        <button class="submit-button btn btn-lg btn-primary btn-block ladda-button" data-style="slide-up" data-color="green" type="submit"><span class="ladda-label">Sign in</span></button>
         <div class="checkbox">
           <label>
             <input name="rememberme" type="checkbox" value="remember-me"> Remember me
           </label>
         </div>
-        <button class="submit-button btn btn-lg btn-primary btn-block ladda-button" data-style="slide-up" data-color="green" type="submit"><span class="ladda-label">Sign in</span></button>
 		<a href="#" class="text-center new-account" data-dismiss="modal" data-toggle="modal" data-target="#signup-dialog">Create an account </a>
       </form>
+
+	<div id="forgotpassword-dialog" class="collapse">
+		  <form class="form-forgot">
+			<h3 class="form-forgot-heading">Forgot Password</h3>
+			<label for="inputEmailPassword" class="">Email address or Username</label>
+			<input name="username" type="text" id="inputEmailPassword" class="form-control" placeholder="Email address" value="guest" required autofocus>
+
+			<!--
+			<label for="inputCaptcha" class="">Captcha</label>
+			<input name="captcha" type="text" id="inputCaptcha" class="form-control" placeholder="" value="" required />
+			-->
+			<button class="forgotpasswordsend-button btn btn-lg btn-secondary btn-block ladda-button" data-style="slide-up" data-color="purple" type="submit"><span class="ladda-label">Send reset mail</span></button>
+		  </form>
+	</div>
+
 </div>
-
-
 
 
 <div class="center-block dashboard" style="display:none">
@@ -93,7 +108,7 @@
 				  </div>
 				</div>
 			</li>
-            <li><a href="#" data-dismiss="modal" data-toggle="modal" data-target="#profile-dialog">Profile</a></li>
+            <li id='profile-button'><a href="#" data-dismiss="modal" data-toggle="modal" data-target="#profile-dialog"><span class="profile-username"></span> <span class="glyphicon glyphicon-user" aria-hidden="true"></span></a></li>
 			<li class='admin-button'><a href="#" data-dismiss="modal" data-toggle="modal" data-target="#admin-dialog">Admin</a></li>
             <li class="logout-button"><a href="">Logout <span class="glyphicon glyphicon-off" aria-hidden="true"></span></a></li>
           </ul>
@@ -346,8 +361,8 @@
       </div>
       <div class="modal-body">
 		<div>
-			<a href="#" class="change-password-button text-center btn btn-lg btn-primary btn-block ladda-button">Change password</a>
-			<a href="#" class="delete-account-button text-center btn btn-lg btn-primary btn-block ladda-button">Delete account</a>
+			<a href="#" class="change-password-button text-center btn btn-lg btn-primary btn-block" data-toggle="modal" data-target="#changepassword-dialog" >Change password</a>
+			<a href="#" class="delete-account-button text-center btn btn-lg btn-primary btn-block">Delete account</a>
 		</div>
       </div>
       <div class="modal-footer">
@@ -427,6 +442,59 @@
   </div><!-- /.modal-dialog -->
 </div><!-- /.modal -->
 
+<div id="resetpassword-dialog" class="modal fade">
+   <div class="modal-dialog">
+    <div class="modal-content">
+      <form  class="form-resetpass">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+       <h2 class="form-resetpass-heading">Reset password</h2>
+      </div>
+      <div class="modal-body">
+		<div style="margin-top: 20px">
+			<div class="form-group">
+				<label for="exampleInputEmail">New Password</label>
+				<input type="password" name="new_password" id="inputResetNewPassword" class="form-control" id="resetNewPassword" placeholder="Enter new password"/>
+				<input type="hidden" name="old_password" id="inputResetOldPassword" value=""/>
+			</div>
+		</div>
+      </div>
+      <div class="modal-footer">
+        <button class="confirm-resetnewpassword-button btn btn-lg btn-primary ladda-button" data-style="slide-up" data-color="green"><span class="ladda-label">Confirm</span></button>
+      </div>
+      </form>
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+
+<div id="changepassword-dialog" class="modal fade">
+   <div class="modal-dialog">
+    <div class="modal-content">
+      <form class="form-changepass">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+       <h2 class="form-changepass-heading">Change password</h2>
+      </div>
+      <div class="modal-body">
+		<div style="margin-top: 20px">
+			<div class="form-group">
+				<label for="exampleInputUsername">Old Password</label>
+				<input type="password" name="old_password" id="inputOldPassword" class="form-control" placeholder="Enter old password">
+			</div>
+			<div class="form-group">
+				<label for="exampleInputEmail">New Password</label>
+				<input type="password" name="new_password"id="inputNewPassword" class="form-control" placeholder="Enter new password">
+			</div>
+		</div>
+      </div>
+      <div class="modal-footer">
+        <button class="confirm-changepassword-button btn btn-lg btn-primary ladda-button" type="submit" data-style="slide-up" data-color="green"><span class="ladda-label">Confirm</span></button>
+      </div>
+      </form>
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
 
 
     <!-- Bootstrap core JavaScript

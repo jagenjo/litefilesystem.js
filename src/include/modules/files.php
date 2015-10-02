@@ -4,12 +4,11 @@ class FilesModule
 {
 	// List of internal configurable variables
 	//********************************************
-	private static $USER_UNIT_SALT = "this is my unit"; //salt used for the name of the new units (avoid people guessing unit names)
 	private static $MAX_UNITS_PER_USER = 5; 
 	private static $MAX_USERS_PER_UNIT = 10;
 	private static $DEFAULT_UNIT_SIZE = 5000000;
-	private static $MIN_UNIT_SIZE = 50000; //in bytes
-	private static $MAX_UNIT_SIZE = 100000000; //in bytes
+	private static $UNIT_MIN_SIZE = 50000; //in bytes
+	private static $UNIT_MAX_SIZE = 100000000; //in bytes
 	private static $PREVIEW_IMAGE_SIZE = 128; //in pixels
 	private static $MAX_PREVIEW_FILE_SIZE = 300000;//in bytes
 	private static $ALLOW_REMOTE_FILES = ALLOW_REMOTE_FILE_DOWNLOADING; //allow to download remote files
@@ -51,13 +50,13 @@ class FilesModule
 			case "searchFiles": $this->actionSearchFiles(); break; //get files matching a search
 			case "getFileInfo": $this->actionGetFileInfo(); break; //get metainfo about one file
 			case "uploadFile": $this->actionUploadFile(); break; //upload a file
-			case "uploadRemoteFile": $this->actionUploadRemoteFile(); break; //upload a file
+			case "uploadRemoteFile": $this->actionUploadRemoteFile(); break; //upload a file from URL
 			case "deleteFile": 	$this->actionDeleteFile(); break; //delete a file (by id)
 			case "moveFile": $this->actionMoveFile(); break; //change a file (also rename)
-			case "updateFile": $this->actionUpdateFile(); break; //update a file with new content
+			case "updateFile": $this->actionUpdateFile(); break; //replace a file content
+			case "updateFilePart": $this->actionUpdateFilePart(); break; //replace a file content
 			case "updateFilePreview": $this->actionUpdateFilePreview(); break; //update file preview image
 			case "updateFileInfo":$this->actionUpdateFileInfo(); break; //update file meta info
-			//case "restart":	$this->actionRestart(); break; //delete all
 			default:
 				//nothing
 				$this->result["status"] = 0;
@@ -126,7 +125,7 @@ class FilesModule
 		}
 
 		$size = intval($_REQUEST["size"]);
-		if($size < self::$MIN_UNIT_SIZE || $size > self::$MAX_UNIT_SIZE )
+		if($size < self::$UNIT_MIN_SIZE || $size > self::$UNIT_MAX_SIZE )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'invalid size';
@@ -476,14 +475,20 @@ class FilesModule
 		
 		if(isset($_REQUEST["total_size"]))
 			$total_size = intval($_REQUEST["total_size"]);
+		if($total_size <= 0)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'unit size cannot be zero';
+			return;
+		}
 
 		debug("totalsize: " . $total_size );
 		if($total_size != -1 && $total_size != $unit->total_size)
 		{
-			if ($total_size < self::$MIN_UNIT_SIZE || $total_size > self::$MAX_UNIT_SIZE)
+			if ($total_size < self::$UNIT_MIN_SIZE || $total_size > self::$UNIT_MAX_SIZE)
 			{
 				$this->result["status"] = -1;
-				$this->result["msg"] = 'invalid size';
+				$this->result["msg"] = 'Invalid Size: '.$total_size.' max size is ' . self::$UNIT_MAX_SIZE;
 				return;
 			}
 
@@ -1640,6 +1645,81 @@ class FilesModule
 		$this->result["msg"] = "file updated";
 	}
 
+	public function actionUpdateFilePart()
+	{
+		$user = $this->getUserByToken();
+		if(!$user) //result already filled in getTokenUser
+			return;
+
+		//which file
+		$file = null;
+		if(isset($_REQUEST["fullpath"]))
+			$file = $this->getFileInfoByFullpath( $_REQUEST["fullpath"] );
+		else if( isset($_REQUEST["file_id"]) )
+			$file = $this->getFileInfoById( intval($_REQUEST["file_id"]) );
+		else
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "params missing";
+			return;
+		}
+
+		if(!$file)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "file not found";
+			return;
+		}
+
+		$fullpath = $file->fullpath;
+
+		//check privileges in file
+		$unit = $this->getUnit( $file->unit_id, $user->id );
+		if(!$unit || $unit->mode == "READ")
+		{
+			$this->result["status"] = -1;
+			debug("actionUpdateFile check unit mode");
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+		//extract file data
+		$encoding = "text";
+		if( isset($_REQUEST["encoding"]) )
+			$encoding = $_REQUEST["encoding"];
+
+		if( $encoding != "file" )
+			$data = $_REQUEST["data"];
+
+		if($encoding == "base64")
+			$data = base64_decode($data);
+		else if($encoding == "file")
+		{
+			if(!isset($_FILES["data"]))
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'file missing';
+				return;
+			}
+			$file = $_FILES["data"];
+			$data = file( $file["tmp_name"] );
+		}
+
+		//check the file is big enough
+
+		//update file content
+		if( !$this->updateFilePart($file->id, $data, $offset) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = $this->last_error;
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["unit"] = $unit;
+		$this->result["msg"] = "file part updated";
+	}
+
 	public function actionUpdateFilePreview()
 	{
 		$user = $this->getUserByToken();
@@ -1773,7 +1853,7 @@ class FilesModule
 	}
 	*/
 
-	public function onUserCreated($user)
+	public function onUserCreated( $user )
 	{
 		debug("Creating unit for user: " . $user->id);
 		$unit = $this->createUnit( $user->id, $user->username, -1, $user->username . " unit" , true );
@@ -1796,7 +1876,7 @@ class FilesModule
 			$this->setPrivileges(0, $user->id, "READ");
 	}
 
-	public function onUserDeleted($user)
+	public function onUserDeleted( $user )
 	{
 		$units = $this->getUserUnits( $user->id, true );
 
@@ -1817,7 +1897,7 @@ class FilesModule
 		return true;
 	}
 
-	public function onSystemInfo(&$info)
+	public function onSystemInfo( &$info )
 	{
 		$max_upload = (int)(ini_get('upload_max_filesize'));
 		$max_post = (int)(ini_get('post_max_size'));
@@ -1830,6 +1910,8 @@ class FilesModule
 
 		$info["max_filesize"] = $upload_mb * 1024*1024;
 		$info["max_units"] = self::$MAX_UNITS_PER_USER;
+		$info["unit_max_size"] = self::$UNIT_MAX_SIZE;
+		$info["unit_min_size"] = self::$UNIT_MIN_SIZE;
 		$info["extensions"] = VALID_EXTENSIONS;
 		$info["files_path"] = substr( FILES_PATH, -1 ) == "/" ? FILES_PATH : FILES_PATH . "/"; //ensure the last character is a slash
 		$info["preview_prefix"] = PREVIEW_PREFIX;
@@ -1838,14 +1920,14 @@ class FilesModule
 	}
 
 	//remove extra slashes
-	public function clearPathName($name)
+	public function clearPathName( $name )
 	{
 		$folders = explode("/",$name);
 		$folders = array_filter( $folders );
 		return implode("/",$folders);
 	}
 
-	public function parsePath($fullpath, $is_folder = false)
+	public function parsePath( $fullpath, $is_folder = false )
 	{
 		$fullpath = $this->clearPathName($fullpath);
 
@@ -1869,7 +1951,7 @@ class FilesModule
 		return $info;
 	}
 
-	public function validateFilename($filename)
+	public function validateFilename( $filename )
 	{
 		//this could be improved by a regular expression...
 		$forbidden = str_split("/|,$:;");
@@ -1885,7 +1967,7 @@ class FilesModule
 		return true;
 	}
 
-	public function validateExtension($filename)
+	public function validateExtension( $filename )
 	{
 		$extension = pathinfo($filename, PATHINFO_EXTENSION);
 
@@ -1896,7 +1978,7 @@ class FilesModule
 	}
 
 	//**************************************************
-	public function createUnit($user_id, $unit_name, $size, $desc_name = "", $change_user_quota = false)
+	public function createUnit( $user_id, $unit_name, $size, $desc_name = "", $change_user_quota = false )
 	{
 		if($size == -1)
 			$size = self::$DEFAULT_UNIT_SIZE;
@@ -1909,7 +1991,13 @@ class FilesModule
 
 		//generate random unit name
 		if(!$unit_name)
-			$unit_name = md5( self::$USER_UNIT_SALT . $user_id . time() . rand() );
+		{
+			if( defined("UNITNAME_SALT") )
+				$salt = UNITNAME_SALT;
+			else
+				$salt = "silly salt"; //for legacy installations
+			$unit_name = md5( $salt . $user_id . time() . rand() );
+		}
 
 		//check if there is already a unit with that name
 		$query = "SELECT * FROM `".DB_PREFIX."units` WHERE `name` = '" . addslashes($unit_name) . "'";
@@ -2224,8 +2312,8 @@ class FilesModule
 	}
 
 
-	//doesnt check privileges or modifies unit size
-	public function storeFile($user_id, $unit_id, $folder, $filename, $fileData, $category, $metadata )
+	//Doesnt check privileges or modifies unit size
+	public function storeFile( $user_id, $unit_id, $folder, $filename, $fileData, $category, $metadata, $totalSize = 0)
 	{
 		$database = getSQLDB();
 
@@ -2237,7 +2325,11 @@ class FilesModule
 		$folder = addslashes( trim($folder) );
 		$category = addslashes($category);
 		$metadata = addslashes($metadata);
-		$size = strlen( $fileData );
+
+		if( $fileData == NULL )
+			$size = intval( $totalSize );
+		else
+			$size = strlen( $fileData );
 
 		//SAFETY FIRST
 		if(!$this->validateFilename( $filename) || strpos($folder,"..") != FALSE)
@@ -2272,7 +2364,7 @@ class FilesModule
 		$fullpath = $unit->name ."/" . $folder . "/" . $filename;
 
 		//already exists?
-		$exist = $this->fileExist($fullpath);
+		$exist = $this->fileExist( $fullpath );
 		if($exist)
 		{
 
@@ -2331,8 +2423,15 @@ class FilesModule
 			}
 		}
 
-		//save file in hard drive
-		if ($this->writeFile( $fullpath, $fileData) != true )
+		$created = false;
+
+		//create empty file
+		if( $fileData == NULL )
+			$created = self::createEmptyFile( $fullpath, $size );
+		else //save file in hard drive
+			$created = self::writeFile( $fullpath, $fileData );
+
+		if( $created == false )
 		{
 			debug( "file size is 0 after trying to write it to HD: " . $fullpath );
 			$this->last_error = "PROBLEM WRITTING FILE";
@@ -2350,7 +2449,7 @@ class FilesModule
 		return $id;
 	}
 
-	public function updateFile($file_id, $fileData )
+	public function updateFile( $file_id, $fileData )
 	{
 		$file_id = intval($file_id);
 
@@ -2374,6 +2473,43 @@ class FilesModule
 
 		//save file in hard drive
 		if( !self::writeFile( $fullpath, $fileData ) )
+		{
+			debug("file couldnt be written");
+			$this->last_error = "PROBLEM WRITTING FILE";
+			return false;
+		}
+
+		return true;
+	}
+
+	public function updateFilePart( $file_id, $fileData, $offset )
+	{
+		$file_id = intval( $file_id );
+
+		$file_info = $this->getFileInfoById($file_id);
+		if( !$file_info )
+		{
+			$this->last_error = "WRONG ID";
+			return false;
+		}
+
+		if( $file_info->size < ( strlen( $fileData ) + intval($offset)) )
+		{
+			$this->last_error = "FILE PART EXCEEDS CURRENT FILE SIZE";
+			return false;
+		}
+
+		$fullpath = $file_info->unit_name . "/" . $file_info->folder . "/" . $file_info->filename;
+
+		//already exists?
+		if(!self::fileExist($fullpath))
+		{
+			$this->last_error = "FILE NOT FOUND IN HD";
+			return false;
+		}
+
+		//save file in hard drive
+		if( !self::writeFilePart( $fullpath, $fileData, $offset ) )
 		{
 			debug("file couldnt be written");
 			$this->last_error = "PROBLEM WRITTING FILE";
@@ -2824,15 +2960,31 @@ class FilesModule
 
 	public function restart()
 	{
+		debug("Droping old tables");
+		$database = getSQLDB();
+
+		$query = "DROP TABLE IF EXISTS ".DB_PREFIX."units, ".DB_PREFIX."privileges, ".DB_PREFIX."files, ".DB_PREFIX."comments;";
+		$result = $database->query( $query );
+
+		debug("Creating files tables");
+		if(!$this->createTables())
+			return;
+
+		//create folders
+		$this->createFolder("");
+
+		//create public unit
+		$this->createUnit(1, "public", 1000*1024*1024, "Public");
+
+		debug("Files folder created");
+	}
+
+	public function createTables()
+	{
 		$database = getSQLDB();
 		$login = getModule("user");
 
-		debug("Creating files tables");
-
 		//UNITS
-		$query = "DROP TABLE IF EXISTS ".DB_PREFIX."units;";
-		$result = $database->query( $query );
-			
 		$query = "CREATE TABLE IF NOT EXISTS ".DB_PREFIX."units (
 			`id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
 			`name` VARCHAR(256) NOT NULL,
@@ -2846,17 +2998,15 @@ class FilesModule
 		$result = $database->query( $query );		
 		if ( $result !== TRUE )
 		{
+			debug("Units table not created");
 			$this->result["msg"] = "Units table not created";
 			$this->result["status"] = -1;
-			return;
+			return false;
 		}
 		else
 			debug("Units table created");
 
 		//PRIVILEGES
-		$query = "DROP TABLE IF EXISTS ".DB_PREFIX."privileges;";
-		$result = $database->query( $query );
-			
 		$query = "CREATE TABLE IF NOT EXISTS ".DB_PREFIX."privileges (
 			`id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
 			`user_id` INT NOT NULL,
@@ -2868,17 +3018,15 @@ class FilesModule
 		$result = $database->query( $query );		
 		if ( $result !== TRUE )
 		{
+			debug("Privileges table not created");
 			$this->result["msg"] = "Privileges table not created";
 			$this->result["status"] = -1;
-			return;
+			return false;
 		}
 		else
 			debug("Privileges table created");
 
 		//FILES
-		$query = "DROP TABLE IF EXISTS ".DB_PREFIX."files;";
-		$result = $database->query( $query );
-			
 		$query = "CREATE TABLE IF NOT EXISTS ".DB_PREFIX."files (
 			`id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
 			`unit_id` INT NOT NULL,
@@ -2895,17 +3043,15 @@ class FilesModule
 		$result = $database->query( $query );		
 		if ( $result !== TRUE )
 		{
+			debug("Files table not created");
 			$this->result["msg"] = "Files table not created";
 			$this->result["status"] = -1;
-			return;
+			return false;
 		}
 		else
 			debug("Files table created");
 
 		//COMMENTS
-		$query = "DROP TABLE IF EXISTS ".DB_PREFIX."comments;";
-		$result = $database->query( $query );
-			
 		$query = "CREATE TABLE IF NOT EXISTS ".DB_PREFIX."comments (
 			`id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
 			`file_id` INT UNSIGNED NOT NULL,
@@ -2917,20 +3063,23 @@ class FilesModule
 		$result = $database->query( $query );		
 		if ( $result !== TRUE )
 		{
+			debug("Comments table not created");
 			$this->result["msg"] = "Comments table not created";
 			$this->result["status"] = -1;
-			return;
+			return false;
 		}
 		else
 			debug("Comments table created");
 
-		//create folders
-		$this->createFolder("");
+		return true;
+	}
 
-		//create public unit
-		$this->createUnit(1, "public", 1000*1024*1024, "Public");
-
-		debug("Files folder created");
+	public function upgrade()
+	{
+		debug("Upgrading files tables");
+		if(!$this->createTables())
+			return false;
+		return true;
 	}
 
 	// SANDBOXED FILE ACTIONS ***********************************************************
@@ -3038,6 +3187,31 @@ class FilesModule
 		}
 		return false;
 		*/
+	}
+
+	private static function writeFilePart($fullpath, $data, $offset)
+	{
+		$finalpath = self::getFilesFolderName() . "/" . $fullpath;
+		$fp = fopen( $finalpath, 'w');
+		if(!$fp)
+			return false;
+		fseek( $fp, intval($offset), SEEK_CUR); 
+		fwrite( $fp, $data );
+		fclose( $fp );
+		return true;
+	}
+
+	private static function createEmptyFile( $fullpath, $size )
+	{
+		$finalpath = self::getFilesFolderName() . "/" . $fullpath;
+		$fp = fopen( $finalpath, 'w');
+		if(!$fp)
+			return false;
+
+		fseek($fp, intval($size)-1,SEEK_CUR); 
+		fwrite($fp,0); //write silly char
+		fclose($fp);
+		return true;
 	}
 
 	public static function copyFile($old, $new)

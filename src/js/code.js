@@ -41,14 +41,81 @@ function systemReady()
 
 		e.preventDefault();
 
+		//store in the login form so he can see it if he logs out
+		$("#inputEmail").val( values["username"] );
+		$("#inputPassword").val( values["password"] );
+
+		//create user
 		LiteFileServer.login( values["username"], values["password"], function(session, result){
 			login_button.stop();
 			$(".form-signin").css("opacity",1);
 
 			if( session.status == LiteFileServer.LOGGED )
 				onLoggedIn(session);
+			else
+				bootbox.alert(result.msg);
+
 		});
 	});
+
+	//FORGOT PASSWORD
+	var forgotpassword_button = Ladda.create( $(".form-forgot .forgotpasswordsend-button")[0] );
+	$(".form-forgot").submit( function(e) {
+		$(this).css("opacity",0.5);
+		forgotpassword_button.start();
+		var values = getFormValues(this);
+		console.log(values);
+
+		e.preventDefault();
+
+		//ask to send email
+		LiteFileServer.forgotPassword( values["username"], function( v, result ){
+			forgotpassword_button.stop();
+			$(".form-forgot").css("opacity",1);
+			bootbox.alert(result.msg);
+		} , window.location.origin + window.location.pathname );
+	});
+
+	//RESET PASSWORD
+	var confirm_resetnewpassword_button = Ladda.create( $("#resetpassword-dialog .confirm-resetnewpassword-button")[0] );
+	$(".form-resetpass").submit( function(e) {
+
+		if(!session)
+			return;
+
+		$(this).css("opacity",0.5);
+		confirm_resetnewpassword_button.start();
+		var values = getFormValues(this);
+		console.log(values);
+		e.preventDefault();
+
+		session.setPassword( values["old_password"], values["new_password"], function( v, result ){
+			confirm_resetnewpassword_button.stop();
+			$(".form-forgot").css("opacity",1);
+			bootbox.alert(result.msg);
+		});
+	});
+
+	//CHANGE PASS
+	var confirm_changepassword_button = Ladda.create( $("#changepassword-dialog .confirm-changepassword-button")[0] );
+	$(".form-changepass").submit( function(e) {
+
+		if(!session)
+			return;
+
+		$(this).css("opacity",0.5);
+		confirm_changepassword_button.start();
+		var values = getFormValues(this);
+		console.log(values);
+		e.preventDefault();
+
+		session.setPassword( values["old_password"], values["new_password"], function( v, result ){
+			confirm_changepassword_button.stop();
+			$(".form-forgot").css("opacity",1);
+			bootbox.alert(result.msg);
+		});
+	});
+	
 
 	//CREATE ACCOUNT
 	var create_account_button = Ladda.create( $("#signup-dialog .submit-button")[0] );
@@ -75,8 +142,6 @@ function systemReady()
 				$("#inputPassword").val( values["password"] );
 				$("#login-dialog .submit-button").click();
 			}
-			else
-				Bootbox.alert( resp.msg );
 		},null, session ? session.token : null );
 	});
 
@@ -150,7 +215,17 @@ function systemReady()
 			$(".login-dialog").show();
 	});
 
-
+	//check if password reset
+	if(QueryString["action"])
+	{
+		if( QueryString["action"] == "login" || QueryString["action"] == "reset")
+			LiteFileServer.login( QueryString["email"], QueryString["pass"], function(session, result){
+				if( session.status == LiteFileServer.LOGGED )
+					onLoggedIn(session);
+				else
+					bootbox.alert(result.msg);
+			});		
+	}
 }
 
 function onLoggedIn(session)
@@ -169,6 +244,13 @@ function onLoggedIn(session)
 
 	refreshUserInfo( session.user );
 	refreshFilesTable();
+
+	if( QueryString["action"] == "reset")
+	{
+		$('#inputResetOldPassword').val(QueryString["pass"]);
+		$('#inputResetNewPassword').val("");
+		$('#resetpassword-dialog').modal('show');
+	}
 }
 
 function onSessionExpired()
@@ -226,6 +308,7 @@ function refreshUserInfo( user )
 	var f = user.used_space / user.total_space;
 	$(".quota").find(".progress-bar").css("width", ((f * 100)|0) + "%");
 	$(".quota").find(".progress-bar .size").html( LFS.getSizeString(user.used_space) );
+	$(".profile-username").html( user.username );
 }
 
 function refreshUnitInfo( unit )
@@ -454,6 +537,7 @@ function refreshFiles( fullpath, on_complete )
 
 	//get files in that folder
 	session.getFilesByPath( fullpath, function(files){
+
 		var root = $(".files-table .content");
 		root.empty();
 
@@ -663,3 +747,26 @@ function getFormValues(form)
 }
 
 
+
+var QueryString = function () {
+  // This function is anonymous, is executed immediately and 
+  // the return value is assigned to QueryString!
+  var query_string = {};
+  var query = window.location.search.substring(1);
+  var vars = query.split("&");
+  for (var i=0;i<vars.length;i++) {
+    var pair = vars[i].split("=");
+        // If first entry with this name
+    if (typeof query_string[pair[0]] === "undefined") {
+      query_string[pair[0]] = decodeURIComponent(pair[1]);
+        // If second entry with this name
+    } else if (typeof query_string[pair[0]] === "string") {
+      var arr = [ query_string[pair[0]],decodeURIComponent(pair[1]) ];
+      query_string[pair[0]] = arr;
+        // If third or later entry with this name
+    } else {
+      query_string[pair[0]].push(decodeURIComponent(pair[1]));
+    }
+  } 
+    return query_string;
+}();

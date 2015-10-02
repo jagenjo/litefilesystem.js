@@ -41,6 +41,27 @@
 		return $result;
 	}
 
+	register_shutdown_function( "fatal_handler" );
+
+	function fatal_handler() {
+		global $end_string;
+		$errfile = "unknown file";
+		$errstr  = "shutdown";
+		$errno   = E_CORE_ERROR;
+		$errline = 0;
+
+		$error = error_get_last();
+		if( $error !== NULL)
+		{
+			$errno   = $error["type"];
+			$errfile = $error["file"];
+			$errline = $error["line"];
+			$errstr  = $error["message"];
+			showMessage( "Code: " . $errno . " \"" . $errstr . "\" File: " . $errfile . " Ln: " . $errline );
+			die($end_string);
+		}
+	}
+
 
 if(!$console)
 {
@@ -81,8 +102,11 @@ if(!$console)
 	else
 		showMessage("config.php found, testing database connection","success");
 
+	//include core
 	require_once 'include/core.php';
+	loadModules("*");
 
+	//check config has valid values
 	if(ADMIN_PASS == "" || ADMIN_MAIL == "")
 	{
 		showMessage("Error: Config.php must be changed, edit the config.php and add a password and an email for the admin account.");
@@ -90,7 +114,7 @@ if(!$console)
 	}
 
 
-	//check if config
+	//check if config works
 	$database = getSQLDB();
 	if(!$database)
 	{
@@ -102,25 +126,38 @@ if(!$console)
 
 	//check if there is data still
 	$system = getModule("system");
-	if( $system->checkReady() && !$force )
+	$is_ready = $system->checkReady();
+
+	if( $is_ready && $console && count($argv) > 1 && $argv[1] == "upgrade" )
+	{
+		showMessage("Upgrading system...","primary");
+		$system->upgradeSystem();
+		showMessage("System upgraded","success");
+		die($end_string);
+	}
+
+	if( $is_ready && !$force )
 	{
 		showMessage("All modules seem ready, nothing to do.","warning");
 		die($end_string);
 	}
 
 	//RESTART
-	clearDebugLog();
-	showMessage("Creating databases and folders","primary");
-	$system->restartSystem();
-
-	//READY
-	if( $system->checkReady() )
-		showMessage("LiteFileServer installed, you can go to the <a href='index.html'>main page</a>.","success");
-	else
+	if($force || !$is_ready)
 	{
-		showMessage("Something went wrong.","warning");
-		if(!$console) 
-			echo('<div class="bs-callout bs-callout-<?=$type?>" id="callout-glyphicons-empty-only">' . getLog() . "</div>");
+		clearDebugLog();
+		showMessage("Creating databases and folders","primary");
+		$system->restartSystem();
+
+		//READY
+		if( $system->checkReady() )
+			showMessage("LiteFileServer installed, you can go to the <a href='index.html'>main page</a>.","success");
+		else
+		{
+			showMessage("Something went wrong.","warning");
+			if(!$console) 
+				echo('<div class="bs-callout bs-callout-<?=$type?>" id="callout-glyphicons-empty-only">' . getLog() . "</div>");
+		}
 	}
 
 if(!$console)
