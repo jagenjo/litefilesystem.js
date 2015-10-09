@@ -177,6 +177,13 @@ function systemReady()
 	});
 
 	//ADMIN
+	$("#userinfo-dialog .usernameInput").keydown(function(event){
+		if(event.keyCode == 13) {
+		  $("#userinfo-dialog .search-user-button").click();
+		  return false;
+		}
+	  });
+
 	$("#userinfo-dialog .search-user-button").click( function(e) {
 		var username = $("#userinfo-dialog .usernameInput").val();
 		if(!username)
@@ -202,10 +209,49 @@ function systemReady()
 		var username = $("#userinfo-dialog .user-name").val();
 		var total = $("#userinfo-dialog .user-totalspace").val();
 		if(!username || !total)
+		{
+			bootbox.alert("Something is missing");
 			return;
+		}
 
-		session.setUserSpace( username, total );
+		session.setUserSpace( username, total, function(v,resp){
+			if(v != 1)
+			{
+				$("#userinfo-dialog p").html(resp.msg);
+				$("#userinfo-dialog .alert").alert();
+			}
+
+		} );
 	});
+
+	$("#userinfo-dialog .delete-user-button").click( function(e) {
+
+		var username = $("#userinfo-dialog .user-name").val();
+		if(!username)
+		{
+			bootbox.alert("Username missing");
+			return;
+		}
+
+		bootbox.confirm("Are you sure?", function(v){
+			if(!v)
+				return;
+
+			session.deleteUserAccount( username, function(v,resp){
+				if(v == 1)
+					bootbox.alert("User account deleted");
+				else
+					bootbox.alert("Cannot be removed");
+			});
+		});
+
+
+
+		e.preventDefault();
+		e.stopPropagation();
+		return true;
+	});
+
 
 	//check existing session
 	LiteFileServer.checkExistingSession( function( server_session ) {
@@ -235,9 +281,9 @@ function onLoggedIn(session)
 	window.session.onsessionexpired = onSessionExpired;
 
 	if( session.user.roles && session.user.roles["admin"] )
-		$(".admin-button").show();
+		$(".admin-options").show();
 	else
-		$(".admin-button").hide();
+		$(".admin-options").hide();
 
 	$(".login-dialog").hide();
 	$(".dashboard").show();
@@ -770,3 +816,14 @@ var QueryString = function () {
   } 
     return query_string;
 }();
+
+
+
+$(document).ready(function() {
+  $(window).keydown(function(event){
+    if(event.keyCode == 13) {
+      event.preventDefault();
+      return false;
+    }
+  });
+});

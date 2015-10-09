@@ -184,7 +184,7 @@ class FilesModule
 		}
 
 		//get unit only if user has rights
-		$unit = $this->getUnitByName( $unit_name, $user->id );
+		$unit = $this->getUnitByName( $unit_name, !$user->roles["admin"] ? $user->id : -1 );
 		if(!$unit)
 		{
 			$this->result["status"] = -1;
@@ -194,7 +194,7 @@ class FilesModule
 
 		//check how many users does this unit have
 		$users = $this->getUnitUsers( $unit->id );
-		if( count($users) >= self::$MAX_USERS_PER_UNIT )
+		if( count($users) >= self::$MAX_USERS_PER_UNIT && !$user->roles["admin"])
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'too many users in this unit';
@@ -219,7 +219,7 @@ class FilesModule
 
 		//check how many units does he have
 		$units = $this->getUserUnits($target_user->id);
-		if($max_units > 0 && count($units) >= $max_units)
+		if($max_units > 0 && count($units) >= $max_units && !$user->roles["admin"])
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'too many units';
@@ -1872,6 +1872,7 @@ class FilesModule
 		//$this->storeFile($user->id, $unit->id, "/test/subfolder", "subtest.txt", "this is an example file", "TEXT", "" );
 		self::createFolder( $unit->name . "/projects" );
 
+		//allow public folder
 		if($user->id > 1) //everybody can read the public folder
 			$this->setPrivileges(0, $user->id, "READ");
 	}

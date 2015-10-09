@@ -109,7 +109,6 @@
 				</div>
 			</li>
             <li id='profile-button'><a href="#" data-dismiss="modal" data-toggle="modal" data-target="#profile-dialog"><span class="profile-username"></span> <span class="glyphicon glyphicon-user" aria-hidden="true"></span></a></li>
-			<li class='admin-button'><a href="#" data-dismiss="modal" data-toggle="modal" data-target="#admin-dialog">Admin</a></li>
             <li class="logout-button"><a href="">Logout <span class="glyphicon glyphicon-off" aria-hidden="true"></span></a></li>
           </ul>
         </div><!--/.nav-collapse -->
@@ -362,7 +361,12 @@
       <div class="modal-body">
 		<div>
 			<a href="#" class="change-password-button text-center btn btn-lg btn-primary btn-block" data-toggle="modal" data-target="#changepassword-dialog" >Change password</a>
-			<a href="#" class="delete-account-button text-center btn btn-lg btn-primary btn-block">Delete account</a>
+			<a href="#" class="delete-account-button text-center btn btn-lg btn-primary btn-block">Delete my account</a>
+			<p class="admin-options">
+		       <h2 class="form-signin-heading">Administration</h2>
+				<a href="#" class="new-account text-center btn btn-lg btn-primary btn-block ladda-button" data-dismiss="modal" data-toggle="modal" data-target="#signup-dialog">Create an account </a>
+				<a href="#" class="get-user-account text-center btn btn-lg btn-primary btn-block ladda-button"  data-dismiss="modal" data-toggle="modal" data-target="#userinfo-dialog">Get user profile</a>
+			</p>
 		</div>
       </div>
       <div class="modal-footer">
@@ -371,26 +375,6 @@
     </div><!-- /.modal-content -->
   </div><!-- /.modal-dialog -->
 </div><!-- /.modal -->
-
-<div id="admin-dialog" class="modal fade" style="display: none">
-	<div class="row">
-		<div class="col-sm-6 col-md-4 col-md-offset-4">
-			<div class="account-wall">
-				<div class="modal-wrap">
-					<h1 class="text-center login-title">Administration</h1>
-
-					<div>
-						<a href="#" class="new-account text-center btn btn-lg btn-primary btn-block ladda-button" data-dismiss="modal" data-toggle="modal" data-target="#signup-dialog">Create an account </a>
-						<a href="#" class="get-user-account text-center btn btn-lg btn-primary btn-block ladda-button"  data-dismiss="modal" data-toggle="modal" data-target="#userinfo-dialog">Get user profile</a>
-
-					</div>
-					<a href="#" class="pull-right need-help" type="button" data-dismiss="modal">Close</a><span class="clearfix"></span>
-					<div class="alert alert-danger" style="width:90%; margin: 0 auto; display: none"></div>
-				</div>
-			</div>
-		</div>
-	</div>
-</div>
 
 <div id="userinfo-dialog" class="modal fade">
    <div class="modal-dialog">
@@ -430,12 +414,15 @@
 				  </span>
 				</div><!-- /input-group -->
 			</div>
+				<div class="alert alert-danger alert-dismissible fade in" role="alert" style="display: none">
+				  <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span></button>
+				  <p></p>
+				</div>
 		</div>
 
       </div>
       <div class="modal-footer">
         <button class="delete-user-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete Account</span></button>
-        <button class="save-unit-setup-button btn btn-lg btn-primary ladda-button" data-style="slide-up" data-color="green"><span class="ladda-label">Save</span></button>
       </div>
       </form>
     </div><!-- /.modal-content -->

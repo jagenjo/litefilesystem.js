@@ -323,4 +323,8 @@ textarea {
 	display: none;
 }
 
+.admin-options {
+	margin-top: 10px;
+}
+
 .slider { width: 100% !important; }

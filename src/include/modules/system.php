@@ -112,6 +112,105 @@ class SystemModule
 		return true;
 	}
 
+	public function getSystemTables()
+	{
+		$database = getSQLDB();
+		$query = "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME LIKE '".DB_PREFIX."%'";
+		$result = $database->query( $query );
+		$table_names = Array();
+		if($result == null)
+			return null;
+
+		while($table = $result->fetch_object())
+			$table_names[] = $table->TABLE_NAME;
+
+		return $table_names;
+	}
+
+	private static function delTree( $dir )
+	{
+		$path = "./";
+		$files = array_diff(scandir($path . $dir), array('.','..'));
+		foreach ($files as $file) {
+		  (is_dir($path . "$dir/$file")) ? self::delTree("$dir/$file") : unlink($path . "$dir/$file");
+		}
+		return rmdir($path . $dir);
+	} 
+
+	public function backup( $filename )
+	{
+		//create backup folder
+		if(!is_dir("../backup"))
+		{
+			mkdir( "../backup" );  
+			chmod( "../backup", 0775);
+		}
+
+		if(is_file("../backup/".$filename.".sql"))
+		{
+			debug("There is another backup, delete it first","red");
+			return false;
+		}
+
+		//get tables from DB, dump to Text file
+		$table_names = $this->getSystemTables();
+
+		//dump DB
+		debug("Saving DB...");
+		$cmd = "mysqldump -u".DB_USER." -p".DB_PASSWORD." ".DB_NAME." " . join(" ",$table_names) . " >  ../backup/".$filename.".sql";
+		//debug( $cmd );
+		exec( $cmd );
+
+		//dump files...
+		debug("Compressing FILES (this could take some time)...");
+		$cmd = "tar -cvzf ../backup/".$filename.".tar.gz -C ". FILES_PATH ." .";
+		exec( $cmd );
+
+		return true;
+	}
+
+	public function restore($filename)
+	{
+		//create backup folder
+		if(!is_dir("../backup") || !is_file("../backup/".$filename.".sql") || !is_file("../backup/".$filename.".tar.gz"))
+		{
+			debug("Backup not found","red");
+			return false;
+		}
+
+		//clear DB: no need to
+		/*
+		$table_names = $this->getSystemTables();
+		$database = getSQLDB();
+		$query = "DROP TABLE IF EXISTS " . join(",",$table_names);
+		//$result = $database->query( $query );
+		*/
+
+		//restore SQL
+		$sql_data = file_get_contents("../backup/".$filename.".sql", true);
+		//$result = $database->query( $sql_data );
+
+		//unzip to folder
+		debug("Decompressing FILES (this could take some time)...");
+		if(1)
+		{
+			if(is_dir("../backup/files"))
+				self::delTree( "../backup/files" );
+			mkdir( "../backup/files" );  
+			chmod( "../backup/files", 0775);
+			$cmd = "tar -xvzf ../backup/".$filename.".tar.gz -C ../backup/files";
+		}
+		else
+		{
+			self::delTree( FILES_PATH );
+			$cmd = "tar -xvzf ../backup/".$filename.".tar.gz -C " . FILES_PATH; 
+		}
+		exec( $cmd );
+
+		return true;
+	}
+
+
 };
 
 //make it public

@@ -411,7 +411,7 @@ class UsersModule
 		if(!$user)
 			return;
 
-		if(!isset($_REQUEST["username"]) || !isset($_REQUEST["password"]))
+		if(!isset($_REQUEST["username"]) || (!isset($_REQUEST["password"]) && !$user->roles["admin"]) )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'params missing';
@@ -419,7 +419,9 @@ class UsersModule
 		}
 
 		$username = $_REQUEST["username"];
-		$password = $_REQUEST["password"];
+
+		if(isset($_REQUEST["password"]))
+			$password = $_REQUEST["password"];
 
 		if( $user->username != $username && !$user->roles["admin"] )
 		{
@@ -438,7 +440,7 @@ class UsersModule
 				return;
 			}
 		}
-		else
+		else //check pass
 		{
 			$salted = $this->saltPassword( $password );
 			if( $salted != $user->password )
@@ -1273,6 +1275,9 @@ class UsersModule
 			$this->result["status"] = -1;
 			return;
 		}
+
+		//create public unit
+
 
 		if(1) //create guest user
 			if( $this->createUser("guest", "guest", "guest@gmail.com", "", "{}", "VALID" ) == false)
