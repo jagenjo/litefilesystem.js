@@ -243,7 +243,7 @@ class UsersModule
 
 		//response with ok
 		$this->result["status"] = 1;
-		$this->result["user"] = $user;
+		//$this->result["user"] = $user;
 		$this->result["msg"] = 'password reset mail sent';
 	}
 
