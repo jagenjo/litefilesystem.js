@@ -17,7 +17,7 @@ $action = $_REQUEST["action"];
 
 $pos = strpos($action,"/");
 if ($pos == false)
-	die('{"msg":"no module in action"}');
+	die('{"msg":"no module in action"}' . "\n");
 
 $module_name = substr($action,0,$pos);
 $module_action = substr($action, $pos + 1, strlen($action) - $pos - 1);

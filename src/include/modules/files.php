@@ -32,6 +32,8 @@ class FilesModule
 		$this->result = Array();
 		$this->result["debug"] = Array();
 
+		debug($action);
+
 		switch($action)
 		{
 			case "createUnit": $this->actionCreateUnit(); break; //create a new unit
@@ -57,6 +59,7 @@ class FilesModule
 			case "updateFilePart": $this->actionUpdateFilePart(); break; //replace a file content
 			case "updateFilePreview": $this->actionUpdateFilePreview(); break; //update file preview image
 			case "updateFileInfo":$this->actionUpdateFileInfo(); break; //update file meta info
+			case "debug":$this->actionDebug(); break; //update file meta info
 			default:
 				//nothing
 				$this->result["status"] = 0;
@@ -188,7 +191,7 @@ class FilesModule
 		if(!$unit)
 		{
 			$this->result["status"] = -1;
-			$this->result["msg"] = 'unit not found or not allowed';
+			$this->result["msg"] = 'unit not found or not allowed: ' . $unit_name;
 			return;
 		}
 
@@ -620,7 +623,13 @@ class FilesModule
 
 		if(isset($_REQUEST["fullpath"]))
 		{
-			$path_info = $this->parsePath( $_REQUEST["fullpath"], true );			
+			$path_info = $this->parsePath( $_REQUEST["fullpath"], true );	
+			if(!$path_info)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'fullpath contains invalid characters';
+				return;			
+			}
 			$unit_name = $path_info->unit;
 			$folder = $path_info->folder;
 		}
@@ -678,7 +687,14 @@ class FilesModule
 
 		if(isset($_REQUEST["fullpath"]))
 		{
-			$path_info = $this->parsePath( $_REQUEST["fullpath"], true );			
+			$path_info = $this->parsePath( $_REQUEST["fullpath"], true );
+			if(!$path_info)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'fullpath contains invalid characters';
+				return;			
+			}
+			
 			$unit_name = $path_info->unit;
 			$folder = $path_info->folder;
 		}
@@ -743,6 +759,13 @@ class FilesModule
 		//check origin
 		$fullpath = $_REQUEST["fullpath"];
 		$folder_info = $this->parsePath( $_REQUEST["fullpath"] );
+		if(!$folder_info)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'fullpath contains invalid characters';
+			return;			
+		}
+
 		$origin_unit = $this->getUnitByName( $origin_info->unit, $user->id );
 		if(!$origin_unit || $origin_unit->mode == "READ")
 		{
@@ -756,6 +779,13 @@ class FilesModule
 		//check privileges in destination unit
 		$target_fullpath = $_REQUEST["target_fullpath"];
 		$target_info = $this->parsePath( $target_fullpath );
+		if(!$target_info)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'target fullpath contains invalid characters';
+			return;			
+		}
+
 		$target_unit = $this->getUnitByName( $target_info->unit, $user->id );
 		if(!$target_unit || $target_unit->mode == "READ")
 		{
@@ -787,6 +817,12 @@ class FilesModule
 		if(isset($_REQUEST["fullpath"]))
 		{
 			$path_info = $this->parsePath( $_REQUEST["fullpath"], true );
+			if(!$path_info)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'fullpath contains invalid characters';
+				return;			
+			}
 			$unit_name = $path_info->unit;
 			$folder = $path_info->folder;
 		}
@@ -925,10 +961,17 @@ class FilesModule
 		$folder = "";
 		$filename = "";
 		$fullpath = "";
+		$bytes = 0;
 
 		if( isset($_REQUEST["fullpath"]) )
 		{
 			$path_info = $this->parsePath( $_REQUEST["fullpath"] );
+			if(!$path_info)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'fullpath contains invalid characters';
+				return;			
+			}
 			$unit_name = $path_info->unit;
 			$folder = $path_info->folder;
 			$filename = $path_info->filename;
@@ -937,8 +980,26 @@ class FilesModule
 		else if(isset($_REQUEST["unit"]) && $_REQUEST["unit"] && isset($_REQUEST["folder"]) && isset($_REQUEST["filename"]) && $_REQUEST["filename"] )
 		{
 			$unit_name = $_REQUEST["unit"];
+			if(!$this->validateFilename($unit_name))
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'unit contains invalid characters';
+				return;
+			}
 			$folder = $_REQUEST["folder"];
+			if( !$this->validateFolder($folder) )
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'folder contains invalid characters: ' . $folder;
+				return;
+			}
 			$filename = $_REQUEST["filename"];
+			if( !$this->validateFilename($filename) )
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'filename contains invalid characters';
+				return;
+			}
 			$fullpath =  $this->clearPathName( $unit_name . "/" . $folder . "/" . $filename );
 		}
 		else
@@ -968,83 +1029,37 @@ class FilesModule
 			return;
 		}
 
+		// FILE DATA RETRIEVING ***************
 		$encoding = "text";
 		if( isset($_REQUEST["encoding"]) && $_REQUEST["encoding"] != "")
 			$encoding = $_REQUEST["encoding"];
 
 		if( $encoding == "file" )
 		{
-			if(!isset($_FILES["data"]))
-			{
-				$this->result["status"] = -1;
-				$this->result["msg"] = 'file missing';
-				return false;
-			}
-
-			$file = $_FILES["data"];
-			if(!$file)
-			{
-				$this->result["status"] = -1;
-				$this->result["msg"] = 'file not found';
-				return false;
-			}
-
-			$err = "";
-			if(isset($file["error"]))
-			{
-				$errnum = $file["error"];
-				switch ($errnum)
-				{
-					case UPLOAD_ERR_OK:	break;
-					case UPLOAD_ERR_INI_SIZE:
-					case UPLOAD_ERR_FORM_SIZE:
-						$max_upload = (int)(ini_get('upload_max_filesize'));
-						$max_post = (int)(ini_get('post_max_size'));
-						$memory_limit = (int)(ini_get('memory_limit'));
-						$upload_mb = min($max_upload, $max_post, $memory_limit);
-						$err = 'File too large (limit of '.$upload_mb.' MBs).';
-						break;
-					case UPLOAD_ERR_PARTIAL:
-						$err = 'File upload was not completed.';
-						break;
-					case UPLOAD_ERR_NO_FILE:
-						$err = 'Zero-length file uploaded.';
-						break;
-					default:
-						break;
-				}
-			}
-
-			if($err != "")
-			{
-				$this->result["status"] = -1;
-				$this->result["msg"] = 'error uploading file';
-				$this->result["error"] = $err;
+			$data = $this->readFileData("data");
+			if ($data === false )
 				return;
-			}
-
-			//Read data (TODO: optimize, move file directly)
-			$data = file_get_contents( $file["tmp_name"] );
-			if($data == false)
-			{
-				debug( "Filename: " . $file["tmp_name"] );
-				$this->result["status"] = -1;
-				$this->result["msg"] = 'error reading file';
-				return;
-			}
 		}
 		else if(!isset($_REQUEST["data"]) )
 		{
-			$this->result["status"] = -1;
-			$this->result["msg"] = 'data params missing';
-			return;
+			if(!isset($_REQUEST["total_size"]) )
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'data params missing';
+				return;
+			}
+			$encoding = null;
+			$data = "";
+			$bytes = intval( $_REQUEST["total_size"] );
+			debug("creating empty file");
 		}
 		else
 			$data = $_REQUEST["data"];
-
-		//retrive all metadata
 		if($encoding == "base64")
 			$data = base64_decode($data);
+		//***************
+
+		//debug("Filesize: " . strlen($data) );
 
 		$preview = null;
 		if( isset($_REQUEST["preview"]) )
@@ -1066,10 +1081,14 @@ class FilesModule
 			$category = $_REQUEST["category"];
 
 		//check storage space stuff
-		$bytes = strlen( $data );
+		if( $data )
+			$bytes = strlen( $data );
+
 		$unit_size = $unit->used_size;
 		$diff = $bytes; //difference in used space between before storing and after storing the file
-		if( $this->fileExist($fullpath) ) //file exist: overwrite
+		$file_exist = $this->fileExist($fullpath);
+
+		if( $file_exist ) //file exist: overwrite
 		{
 			$old_file_size = $this->getFileSize( $fullpath );
 			$diff = $bytes - $old_file_size;
@@ -1083,7 +1102,7 @@ class FilesModule
 		}
 
 		//store file
-		$file_id = $this->storeFile( $user->id, $unit->id, $folder, $filename, $data, $category, $metadata );
+		$file_id = $this->storeFile( $user->id, $unit->id, $folder, $filename, $data, $category, $metadata, $bytes );
 		if($file_id == null)
 		{
 			$this->result["status"] = -1;
@@ -1092,9 +1111,12 @@ class FilesModule
 		}
 
 		//update unit used size
-		if(!$this->changeUnitUsedSize( $unit->id, $diff, true ))
-			debug("Something went wrong when changing used size: " . $diff);
-		$unit_size += $diff;
+		if($diff != 0)
+		{
+			if(!$this->changeUnitUsedSize( $unit->id, $diff, true ) )
+				debug("Something went wrong when changing used size: " . $diff);
+			$unit_size += $diff;
+		}
 
 		if($preview)
 		{
@@ -1146,6 +1168,13 @@ class FilesModule
 		if( isset($_REQUEST["fullpath"]) )
 		{
 			$path_info = $this->parsePath( $_REQUEST["fullpath"] );
+			if(!$path_info)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'fullpath contains invalid characters';
+				return;			
+			}
+
 			$unit_name = $path_info->unit;
 			$folder = $path_info->folder;
 			$filename = $path_info->filename;
@@ -1154,8 +1183,26 @@ class FilesModule
 		else if(isset($_REQUEST["unit"]) && $_REQUEST["unit"] && isset($_REQUEST["folder"]) && isset($_REQUEST["filename"]) && $_REQUEST["filename"] )
 		{
 			$unit_name = $_REQUEST["unit"];
+			if(!$this->validateFilename($unit_name))
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'unit contains invalid characters';
+				return;
+			}
 			$folder = $_REQUEST["folder"];
+			if( !$this->validateFolder($folder))
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'folder contains invalid characters';
+				return;
+			}
 			$filename = $_REQUEST["filename"];
+			if(!$this->validateFilename($filename))
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'filename contains invalid characters';
+				return;
+			}
 			$fullpath =  $this->clearPathName( $unit_name . "/" . $folder . "/" . $filename );
 		}
 		else
@@ -1322,8 +1369,13 @@ class FilesModule
 			$this->result["status"] = -1;
 			debug("Filesize of " . $fullpath );
 			$this->result["msg"] = "File size cannot be computed";
+			//force remove from DB
+			$this->deleteFileById( $file->id, $user->id );
 			return false;
 		}
+
+		if($bytes < $file->size)
+			$bytes = $file->size; //just to be sure we adapt the quota right
 
 		//delete the file
 		if( !$this->deleteFileById( $file->id, $user->id ) )
@@ -1390,6 +1442,13 @@ class FilesModule
 
 		//check privileges in destination unit
 		$targetfile_info = $this->parsePath( $_REQUEST["target_fullpath"] );
+		if(!$targetfile_info)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'fullpath contains invalid characters';
+			return;			
+		}
+
 		$target_unit = $this->getUnitByName( $targetfile_info->unit, $user->id );
 		if(!$target_unit || $target_unit->mode == "READ")
 		{
@@ -1486,6 +1545,13 @@ class FilesModule
 
 		//check privileges in destination unit
 		$targetfile_info = $this->parsePath( $_REQUEST["target_fullpath"] );
+		if(!$targetfile_info)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'fullpath contains invalid characters';
+			return;			
+		}
+
 		$target_unit = $this->getUnitByName( $targetfile_info->unit, $user->id );
 		if(!$target_unit || $target_unit->mode == "READ")
 		{
@@ -1573,27 +1639,28 @@ class FilesModule
 			return;
 		}
 
-		//extract file data
+		// FILE DATA RETRIEVING ***************
 		$encoding = "text";
-		if( isset($_REQUEST["encoding"]) )
+		if( isset($_REQUEST["encoding"]) && $_REQUEST["encoding"] != "")
 			$encoding = $_REQUEST["encoding"];
-
-		if( $encoding != "file" )
+		if( $encoding == "file" )
+		{
+			$data = $this->readFileData("data");
+			if ($data === false )
+				return;
+		}
+		else if(!isset($_REQUEST["data"]) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'data params missing';
+			return;
+		}
+		else
 			$data = $_REQUEST["data"];
-
 		if($encoding == "base64")
 			$data = base64_decode($data);
-		else if($encoding == "file")
-		{
-			if(!isset($_FILES["data"]))
-			{
-				$this->result["status"] = -1;
-				$this->result["msg"] = 'file missing';
-				return;
-			}
-			$file = $_FILES["data"];
-			$data = file( $file["tmp_name"] );
-		}
+		//***************
+
 
 		//compute difference in bytes
 		$bytes = strlen($data);
@@ -1648,7 +1715,7 @@ class FilesModule
 	public function actionUpdateFilePart()
 	{
 		$user = $this->getUserByToken();
-		if(!$user) //result already filled in getTokenUser
+		if( !$user ) //result already filled in getTokenUser
 			return;
 
 		//which file
@@ -1660,11 +1727,19 @@ class FilesModule
 		else
 		{
 			$this->result["status"] = -1;
-			$this->result["msg"] = "params missing";
+			$this->result["msg"] = "file params missing";
 			return;
 		}
 
-		if(!$file)
+		if(!isset($_REQUEST["offset"]) || !isset($_REQUEST["total_size"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "part params missing";
+			return;
+		}
+
+
+		if( !$file )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = "file not found";
@@ -1683,32 +1758,44 @@ class FilesModule
 			return;
 		}
 
-		//extract file data
+		debug( $fullpath  );
+		$old_size = $this->getFileSize( $fullpath );
+
+		// FILE DATA RETRIEVING ***************
 		$encoding = "text";
-		if( isset($_REQUEST["encoding"]) )
+		if( isset($_REQUEST["encoding"]) && $_REQUEST["encoding"] != "")
 			$encoding = $_REQUEST["encoding"];
-
-		if( $encoding != "file" )
+		if( $encoding == "file" )
+		{
+			$data = $this->readFileData("data");
+			if ($data === false )
+				return;
+		}
+		else if(!isset($_REQUEST["data"]) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'data params missing';
+			return;
+		}
+		else
 			$data = $_REQUEST["data"];
-
 		if($encoding == "base64")
 			$data = base64_decode($data);
-		else if($encoding == "file")
-		{
-			if(!isset($_FILES["data"]))
-			{
-				$this->result["status"] = -1;
-				$this->result["msg"] = 'file missing';
-				return;
-			}
-			$file = $_FILES["data"];
-			$data = file( $file["tmp_name"] );
-		}
+		//***************
+
 
 		//check the file is big enough
+		$offset = intval($_REQUEST["offset"]);
+		$total_size = intval($_REQUEST["total_size"]);
+		if( $old_size != $total_size)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "sizes do not match: " . $old_size . " != " . $total_size;
+			return;
+		}
 
 		//update file content
-		if( !$this->updateFilePart($file->id, $data, $offset) )
+		if( !$this->updateFilePart( $file->id, $data, $offset ) )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = $this->last_error;
@@ -1717,6 +1804,7 @@ class FilesModule
 
 		$this->result["status"] = 1;
 		$this->result["unit"] = $unit;
+		$this->result["size"] = $this->getFileSize( $fullpath );
 		$this->result["msg"] = "file part updated";
 	}
 
@@ -1908,12 +1996,16 @@ class FilesModule
 		$info["upload_max_filesize"] = $max_upload;
 		$info["post_max_size"] = $max_post;
 		$info["memory_limit"] = $memory_limit;
+		$info["allow_big_files"] = EXTENSIONS_BIG_FILES;
 
 		$info["max_filesize"] = $upload_mb * 1024*1024;
 		$info["max_units"] = self::$MAX_UNITS_PER_USER;
 		$info["unit_max_size"] = self::$UNIT_MAX_SIZE;
 		$info["unit_min_size"] = self::$UNIT_MIN_SIZE;
-		$info["extensions"] = VALID_EXTENSIONS;
+		if( USE_EXTENSIONS_WHITELIST )
+			$info["whitelist"] = EXTENSIONS_WHITELIST;
+		if( USE_EXTENSIONS_BLACKLIST )
+			$info["blacklist"] = EXTENSIONS_BLACKLIST;
 		$info["files_path"] = substr( FILES_PATH, -1 ) == "/" ? FILES_PATH : FILES_PATH . "/"; //ensure the last character is a slash
 		$info["preview_prefix"] = PREVIEW_PREFIX;
 		$info["preview_sufix"] = PREVIEW_SUFIX;
@@ -1931,6 +2023,11 @@ class FilesModule
 	public function parsePath( $fullpath, $is_folder = false )
 	{
 		$fullpath = $this->clearPathName($fullpath);
+
+		//check for invalid characters
+		if(preg_match('/^[0-9a-zA-Z\/\_\- ... ]+$/', $fullpath) == FALSE) {
+			return null;
+		}
 
 		$pos = strpos($filename,"?");
 		if($pos != FALSE) //remove trailings url stuff
@@ -1954,6 +2051,19 @@ class FilesModule
 
 	public function validateFilename( $filename )
 	{
+		return preg_match('/^[0-9a-zA-Z\_\- ... ]+$/', $filename);
+	}
+
+	public function validateFolder( $folder )
+	{
+		if( strlen($folder) == 0 )
+			return true; //we accept an empty string as folder name (for the root folder)
+		return preg_match('/^[0-9a-zA-Z\/\_\- ... ]+$/', $folder);
+	}
+
+	/*
+	public function validateFilename( $filename )
+	{
 		//this could be improved by a regular expression...
 		$forbidden = str_split("/|,$:;");
 
@@ -1967,14 +2077,18 @@ class FilesModule
 		}
 		return true;
 	}
+	*/
 
 	public function validateExtension( $filename )
 	{
 		$extension = pathinfo($filename, PATHINFO_EXTENSION);
 
-		//if( !isset( self::$VALID_EXTENSIONS[ $extension ] ) )
-		if( strpos( VALID_EXTENSIONS, $extension) === false )
+		if( USE_EXTENSIONS_WHITELIST && strpos( EXTENSIONS_WHITELIST, $extension) === false )
 			return false;
+
+		if( USE_EXTENSIONS_BLACKLIST && strpos( EXTENSIONS_BLACKLIST, $extension) !== false )
+			return false;
+
 		return true;
 	}
 
@@ -2314,7 +2428,7 @@ class FilesModule
 
 
 	//Doesnt check privileges or modifies unit size
-	public function storeFile( $user_id, $unit_id, $folder, $filename, $fileData, $category, $metadata, $totalSize = 0)
+	public function storeFile( $user_id, $unit_id, $folder, $filename, $fileData, $category, $metadata, $totalSize = 0 )
 	{
 		$database = getSQLDB();
 
@@ -2427,8 +2541,11 @@ class FilesModule
 		$created = false;
 
 		//create empty file
-		if( $fileData == NULL )
+		if( $fileData == NULL || $size == 0 )
+		{
+			debug("Creating empty file");
 			$created = self::createEmptyFile( $fullpath, $size );
+		}
 		else //save file in hard drive
 			$created = self::writeFile( $fullpath, $fileData );
 
@@ -2466,7 +2583,7 @@ class FilesModule
 		//already exists?
 		if(!self::fileExist($fullpath))
 		{
-			$this->last_error = "FILE NOT FOUND IN HD";
+			$this->last_error = "FILE NOT FOUND IN HD: " . $fullpath;
 			return false;
 		}
 
@@ -2487,7 +2604,7 @@ class FilesModule
 	{
 		$file_id = intval( $file_id );
 
-		$file_info = $this->getFileInfoById($file_id);
+		$file_info = $this->getFileInfoById( $file_id );
 		if( !$file_info )
 		{
 			$this->last_error = "WRONG ID";
@@ -2505,7 +2622,13 @@ class FilesModule
 		//already exists?
 		if(!self::fileExist($fullpath))
 		{
-			$this->last_error = "FILE NOT FOUND IN HD";
+			$this->last_error = "FILE NOT FOUND IN HD: " . $fullpath;
+			return false;
+		}
+
+		if( !strlen($fileData) )
+		{
+			$this->last_error = "FILE PART EMPTY";
 			return false;
 		}
 
@@ -2761,6 +2884,72 @@ class FilesModule
 	}
 
 	// File category and metadata ************************************
+
+	public function readFileData( $field_name = "data" )
+	{
+		if(!isset($_FILES[ $field_name ]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'file missing';
+			return false;
+		}
+
+		$file = $_FILES[ $field_name ];
+		if(!$file)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'file not found';
+			return false;
+		}
+
+		$err = "";
+		if(isset($file["error"]))
+		{
+			$errnum = $file["error"];
+			switch ($errnum)
+			{
+				case UPLOAD_ERR_OK:	break;
+				case UPLOAD_ERR_INI_SIZE:
+				case UPLOAD_ERR_FORM_SIZE:
+					$max_upload = (int)(ini_get('upload_max_filesize'));
+					$max_post = (int)(ini_get('post_max_size'));
+					$memory_limit = (int)(ini_get('memory_limit'));
+					$upload_mb = min($max_upload, $max_post, $memory_limit);
+					$err = 'File too large (limit of '.$upload_mb.' MBs).';
+					break;
+				case UPLOAD_ERR_PARTIAL:
+					$err = 'File upload was not completed.';
+					break;
+				case UPLOAD_ERR_NO_FILE:
+					$err = 'Zero-length file uploaded.';
+					break;
+				default:
+					break;
+			}
+		}
+
+		if($err != "")
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'error uploading file';
+			$this->result["error"] = $err;
+			return false;
+		}
+
+		//Read data (TODO: optimize, move file directly)
+		$data = file_get_contents( $file["tmp_name"] );
+		if($data == false)
+		{
+			debug( "Filename: " . $file["tmp_name"] );
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'error reading file data from REQ';
+			return false;
+		}
+
+		return $data;
+	}
+
+
 	public function updateFileInfo($file_id, $info, $user_id = -1 )
 	{
 		$file_id = intval($file_id);
@@ -2800,7 +2989,7 @@ class FilesModule
 		return true;
 	}
 
-	public function deleteFileById($file_id, $user_id = -1)
+	public function deleteFileById( $file_id, $user_id = -1)
 	{
 		$database = getSQLDB();
 
@@ -2814,8 +3003,17 @@ class FilesModule
 			return false;
 		}
 
+		$unit_id = $file_info->unit_id;
+		$unit = $this->getUnit( $unit_id, $user_id );
+
+		if($unit->mode == "READ" && $user_id == -1)
+		{
+			$this->last_error = "User only has read privileges, cannot delete";
+			return false;
+		}
+
 		$filter = "";
-		if($user_id != -1)
+		if( $user_id != -1 && $unit->mode != "ADMIN" )
 			$filter = " AND author_id = " . intval( $user_id );
 
 		//delete from DB
@@ -3117,7 +3315,7 @@ class FilesModule
 		return $folders;
 	}
 
-	private static function getFilesInFolder($folder)
+	private static function getFilesInFolder( $folder )
 	{
 		$path = self::getFilesFolderName() . "/" . $folder;
 		if(!is_dir($path)) return null;
@@ -3131,12 +3329,12 @@ class FilesModule
 		return $result;
 	}
 
-	private static function fileExist($path)
+	private static function fileExist( $path )
 	{
 		return is_file(self::getFilesFolderName() . "/" . $path);
 	}
 
-	private static function getFileSize($path)
+	private static function getFileSize( $path )
 	{
 		return filesize(self::getFilesFolderName() . "/" . $path);
 	}
@@ -3177,6 +3375,7 @@ class FilesModule
 		$result = file_put_contents( $finalpath , $data );
 		if($result === FALSE)
 			return false;
+		debug("File written, size: " . filesize( $finalpath ) );
 		return true;
 		/*
 		$fp = fopen(  self::getFilesFolderName() . "/" . $fullpath , 'wb');
@@ -3192,26 +3391,49 @@ class FilesModule
 
 	private static function writeFilePart($fullpath, $data, $offset)
 	{
-		$finalpath = self::getFilesFolderName() . "/" . $fullpath;
-		$fp = fopen( $finalpath, 'w');
-		if(!$fp)
+		if( strlen($data) == 0 )
+		{
+			debug( "Error: No Data" );
 			return false;
-		fseek( $fp, intval($offset), SEEK_CUR); 
+		}
+
+		$finalpath = self::getFilesFolderName() . "/" . $fullpath;
+
+		//debug($finalpath);
+		$old_size = filesize($finalpath);
+
+		$fp = fopen( $finalpath, 'r+');
+		if( !$fp )
+			return false;
+		if( fseek( $fp, intval($offset), SEEK_SET ) != 0 )
+		{
+			debug( "Error seeking in file" );
+			fclose( $fp );
+			return false;
+		}
 		fwrite( $fp, $data );
 		fclose( $fp );
+
+		//debug( "Data size: ". strlen($data) );
+		//debug( "Before: ". $old_size ." After: " . filesize($finalpath));
+
 		return true;
 	}
 
-	private static function createEmptyFile( $fullpath, $size )
+	private static function createEmptyFile( $fullpath, $size = 0 )
 	{
 		$finalpath = self::getFilesFolderName() . "/" . $fullpath;
+		
 		$fp = fopen( $finalpath, 'w');
 		if(!$fp)
 			return false;
-
-		fseek($fp, intval($size)-1,SEEK_CUR); 
-		fwrite($fp,0); //write silly char
+		if($size)
+		{
+			fseek($fp, intval($size)-1,SEEK_SET); 
+			fwrite($fp,"\0"); //write end
+		}
 		fclose($fp);
+
 		return true;
 	}
 
@@ -3425,6 +3647,45 @@ class FilesModule
 			$files[] = $file;
 
 		return $files;		
+	}
+
+
+	public function recomputeUnitSize( $unit_id = -1 )
+	{
+		$unit_id = intval($unit_id);
+
+		$database = getSQLDB();
+		$query = "SELECT `unit_id`, SUM(`size`) AS total_size FROM `".DB_PREFIX."files` GROUP BY `unit_id`";
+		
+		if( $unit_id != -1 )
+			$query .= " WHERE `unit_id` = " . $unit_id;
+
+		$result = $database->query( $query );
+		if (!$result) 
+			return false;
+		
+		while( $row = $result->fetch_object() )
+		{
+			$id = $row->unit_id;
+			$total_size = $row->total_size;
+			debug( "ID: " . $id . " Size: " . $total_size );
+			$query = "UPDATE `".DB_PREFIX."units` SET `used_size` = ".$total_size." WHERE `id` = ".$id;
+			$result2 = $database->query( $query );
+			if (!$result2)
+				return false;
+		}
+
+		return true;
+	}
+
+	public function actionDebug()
+	{
+		$r = $this->recomputeUnitSize();
+
+		if( $r )
+			$this->result["status"] = 1;
+		else
+			$this->result["status"] = -1;
 	}
 
 	/*
