@@ -1333,7 +1333,7 @@ class FilesModule
 
 		if(isset($_REQUEST["multiple_files"]))
 		{
-			
+			//TODO
 		}
 		else if(isset($_REQUEST["fullpath"]))
 		{
@@ -3006,7 +3006,7 @@ class FilesModule
 		$unit_id = $file_info->unit_id;
 		$unit = $this->getUnit( $unit_id, $user_id );
 
-		if($unit->mode == "READ" && $user_id == -1)
+		if($unit->mode == "READ" && $user_id != -1)
 		{
 			$this->last_error = "User only has read privileges, cannot delete";
 			return false;
