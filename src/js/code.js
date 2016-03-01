@@ -177,6 +177,91 @@ function systemReady()
 	});
 
 	//ADMIN
+	$(".show-backups").click( updateBackupsList );
+
+	var progressbar_code = $(".progress")[0].outerHTML;
+
+	function updateBackupsList(){
+		session.getBackupsList( function(v,resp){
+			$("#backups-dialog .backups").empty();
+			if(!resp)
+				return;
+			for(var i in resp.data)
+			{
+				var backup = resp.data[i];
+				var elem = $("#backups-dialog .template").clone();
+				elem.removeClass("template");
+				$(elem).find(".name").html( backup.name );
+				$(elem).find(".time").html( backup.pretty_time );
+				$(elem).find(".size").html( LFS.getSizeString( backup.size ) );
+				var delete_backup_button = $(elem).find(".delete-backup-button");
+				delete_backup_button[0].dataset["backup_name"] = backup.name;
+				delete_backup_button.click(function(){
+					var name = this.dataset["backup_name"];
+					session.deleteBackup( name, function(v, resp){
+						if(v)
+						{
+							bootbox.alert("Backup deleted");
+							updateBackupsList();
+						}
+						else
+							bootbox.alert("Cannot delete backup");
+					});						
+				});
+
+				var restore_backup_button = $(elem).find(".restore-backup-button");
+				restore_backup_button[0].dataset["backup_name"] = backup.name;
+				restore_backup_button.click(function(){
+					var name = this.dataset["backup_name"];
+
+					bootbox.prompt({ title:"WARNING: Restoring and old backup will destroy all the current data. To ensure that this is what you want, type the name of the backup",
+						value: "",
+						callback: function(result) {
+							if(!result || result != name)
+								return;
+							var dialog = bootbox.dialog({ closeButton: false, message: "Restoring backup, please wait, this could take some time..." + progressbar_code});
+							session.restoreBackup( name, function(v, resp){
+								dialog.remove();
+								if(v)
+								{
+									bootbox.alert("Backup restored");
+									updateBackupsList();
+								}
+								else
+									bootbox.alert("Cannot restore backup");
+							});	
+						}
+					}); 
+				});
+
+				$("#backups-dialog .backups").append( elem );
+
+			}
+		}, session.user.token );
+	}
+
+	$(".create-backup-button").click(function(){
+		bootbox.prompt({ title:"Create Backup",
+			value: "backup_" + (new Date()).getTime(),
+			callback: function(result) {
+				if(!result)
+					return;
+				var dialog = bootbox.dialog({ closeButton: false, message: "Creating backup, please wait, this could take some time..." + progressbar_code});
+				dialog
+				session.createBackup( result, function(v, resp){
+					dialog.remove();
+					if(v)
+					{
+						bootbox.alert("Backup created");
+						updateBackupsList();
+					}
+					else
+						bootbox.alert("Cannot create backup");
+				});
+			}
+		}); 
+	});
+
 	$("#userinfo-dialog .usernameInput").keydown(function(event){
 		if(event.keyCode == 13) {
 		  $("#userinfo-dialog .search-user-button").click();

@@ -14,7 +14,7 @@
 		if($console)
 		{
 			$msg = strip_tags($msg);
-			echo ($type == "danger" ? "\033[31m - " : " + ") . $msg."\033[0m\n";
+			echo ($type == "danger" ? "\033[31m - " : "") . $msg."\033[0m\n";
 			return;
 		}
 
@@ -90,28 +90,19 @@ if(!$console)
 	<h1>LiteFileServer Backup tool</h1>
 
 <?php
-}//cli
+}
 
+	showMessage(" LFS Backup tool *************","success");
 
 	if (!file_exists(__DIR__ . "/include/config.php"))
 	{
 		showMessage("Cannot find <strong>include/config.php</strong> file, please remember to create a copy of  <strong>config.sample.php</strong> as  <strong>config.php </strong> and edit it with your DB values.");
 		die($end_string);
 	}
-	else
-		showMessage("config.php found, testing database connection","success");
 
 	//include core
 	require_once 'include/core.php';
 	loadModules("*");
-
-	//check config has valid values
-	if(ADMIN_PASS == "" || ADMIN_MAIL == "")
-	{
-		showMessage("Error: Config.php must be changed, edit the config.php and add a password and an email for the admin account.");
-		die($end_string);
-	}
-
 
 	//check if config works
 	$database = getSQLDB();
@@ -120,8 +111,6 @@ if(!$console)
 		showMessage("Cannot connect to database, check that the info inside config.php is correct and your databse running.");
 		die($end_string);
 	}
-	else
-		showMessage("Database connection established","success");
 
 	//check if there is data still
 	$system = getModule("system");
@@ -129,13 +118,19 @@ if(!$console)
 
 	if( !$is_ready )
 	{
-		showMessage("System hasnt been installed.","warning");
+		showMessage("System hasnt been installed. Cannot save or restore backup.","warning");
+		die($end_string);
+	}
+
+	if(!$console)
+	{
+		showMessage("Backup WEB version not supported, you must use the command line interface.","warning");
 		die($end_string);
 	}
 
 	clearDebugLog();
 
-	if( count($argv) < 3 )
+	if( count($argv) < 2 )
 	{
 		showMessage("Parameters missing. usage: backup create|restore backup_name","warning");
 		die($end_string);
@@ -144,18 +139,52 @@ if(!$console)
 	if( $argv[1] == "create" )
 	{
 		showMessage("Creating Backup","primary");
-		if( $system->backup(  $argv[2] ) )
+		if( $system->createBackup(  $argv[2] ) )
 			showMessage("Backup created.","success");
 		else
 			showMessage("Something went wrong.","warning");
 	}
+	else if( $argv[1] == "list" )
+	{
+		showMessage(" Listing available backups:","primary");
+		$backups = $system->getBackupsList();
+		if(!$backups || count($backups) == 0)
+			showMessage( " No backups found", "primary" );
+		else
+			foreach( $backups as $i => $backup_info )
+				showMessage( " * " . $backup_info["name"] . "     " . date ("F d Y H:i:s", $backup_info["time"]), "primary" );
+	}
+	else if( $argv[1] == "dump" )
+	{
+		if( count($argv) > 2 )
+		{
+			showMessage("Dumping Backup","primary");
+			if( $system->restoreBackup( $argv[2], true ) )
+				showMessage("Backup dumped to folder.","success");
+			else
+				showMessage("Something went wrong.","warning");
+		}
+	}
 	else if( $argv[1] == "restore" )
 	{
-		showMessage("Restoring Backup","primary");
-		if( $system->restore(  $argv[2] ) )
-			showMessage("Backup restored.","success");
+		if( count($argv) < 3 )
+		{
+			showMessage(" No backup specified, listing available backups:","primary");
+			$backups = $system->getBackupsList();
+			if(!$backups || count($backups) == 0)
+				showMessage( " No backups found", "primary" );
+			else
+				foreach( $backups as $i => $backup_info )
+					showMessage( " * " . $backup_info["name"] . "     " . date ("F d Y H:i:s", $backup_info["time"]), "primary" );
+		}
 		else
-			showMessage("Something went wrong.","warning");
+		{
+			showMessage("Restoring Backup","primary");
+			if( $system->restoreBackup(  $argv[2] ) )
+				showMessage("Backup restored.","success");
+			else
+				showMessage("Something went wrong.","warning");
+		}
 	}
 	else
 		showMessage("Wrong action.","error");

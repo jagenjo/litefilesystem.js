@@ -50,7 +50,12 @@ $(".setup-unit-button").click(function(e){
 
 	save_setup_ladda.stop();
 
-	$("#setup-unit-dialog .size-info").html( LFS.getSizeString( unit.used_size ) + " / " + LFS.getSizeString( unit.total_size ) );
+	if(!session)
+		return;
+
+	var available_space = session.user.total_space - session.user.used_space + unit.total_size;
+
+	$("#setup-unit-dialog .size-info").html( LFS.getSizeString( unit.used_size ) + " / " + LFS.getSizeString( available_space ) );
 
 	refreshSlider( unit );
 
@@ -62,7 +67,7 @@ function refreshSlider( unit )
 {
 	var value = unit.total_size;
 	var unused = (unit.total_size - unit.used_size);
-	var min = 1024*1024;
+	var min = system_info.unit_min_size;
 	var max = session.user.total_space - session.user.used_space + unit.total_size;
 	if(max > system_info.unit_max_size)
 		max = system_info.unit_max_size;

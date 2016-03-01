@@ -35,7 +35,7 @@
        <h2 class="form-signin-heading">Checking LFSystem</h2>
        <h3 class="form-signin-heading">Please wait</h3>
 		<div class="progress">
-		  <div class="progress-bar progress-bar-striped active" role="progressbar" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100" style="width: 100%">
+		  <div class="progress-bar progress-bar-striped active" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%">
 			<span class="sr-only"></span>
 		  </div>
 		</div>
@@ -366,6 +366,7 @@
 		       <h2 class="form-signin-heading">Administration</h2>
 				<a href="#" class="new-account text-center btn btn-lg btn-primary btn-block ladda-button" data-dismiss="modal" data-toggle="modal" data-target="#signup-dialog">Create an account </a>
 				<a href="#" class="get-user-account text-center btn btn-lg btn-primary btn-block ladda-button"  data-dismiss="modal" data-toggle="modal" data-target="#userinfo-dialog">Get user profile</a>
+				<a href="#" class="show-backups text-center btn btn-lg btn-primary btn-block ladda-button"  data-dismiss="modal" data-toggle="modal" data-target="#backups-dialog">Backups</a>
 			</p>
 		</div>
       </div>
@@ -425,6 +426,44 @@
         <button class="delete-user-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete Account</span></button>
       </div>
       </form>
+    </div><!-- /.modal-content -->
+  </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+
+<div id="backups-dialog" class="modal fade">
+   <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+       <h2 class="form-backups-heading">Backups</h2>
+      </div>
+      <div class="modal-body">
+
+		<h3>Existing backups</h3>
+		<div class="backups">
+		</div>
+
+		<div class="backup-item template">
+			<span class='glyphicon glyphicon-book' aria-hidden='true'></span> <span class='name'></span>
+			<div class="dropdown">
+			  <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown" aria-expanded="true">
+				Actions
+				<span class="caret"></span>
+			  </button>
+			  <ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="dropdownMenu1">
+				<li role="presentation"><a class='restore-backup-button' role="menuitem" tabindex="-1" href="#">Restore</a></li>
+				<li role="presentation"><a class='delete-backup-button' role="menuitem" tabindex="-1" href="#">Delete</a></li>
+			  </ul>
+			</div>
+			<div class="info">
+				<span class="time"></span><span class="size"></span>
+			</div>
+		</div>		
+      </div>
+      <div class="modal-footer">
+        <button class="create-backup-button btn btn-primary">Create Backup</button>
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+      </div>
     </div><!-- /.modal-content -->
   </div><!-- /.modal-dialog -->
 </div><!-- /.modal -->

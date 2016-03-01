@@ -1,6 +1,13 @@
 <?php 
 
+	$allow_restart = true;
+
+	//SAFETY: UNCOMMENT THE NEXT LINE TO BE SURE ITS IMPOSSIBLE TO LOSE THE DATA
+	//$allow_restart = false; 
+
 	$force = false;
+	$restart_code = "YES";
+
 	$console = php_sapi_name() == "cli";
 	$end_string = $console ? "" : "</div></body></html>";
 
@@ -60,6 +67,14 @@
 			showMessage( "Code: " . $errno . " \"" . $errstr . "\" File: " . $errfile . " Ln: " . $errline );
 			die($end_string);
 		}
+	}
+
+	function read_input( $msg )
+	{
+		echo $msg;
+		$handle = fopen ("php://stdin","r");
+		$line = fgets($handle);
+		return trim($line);
 	}
 
 
@@ -136,6 +151,13 @@ if(!$console)
 		die($end_string);
 	}
 
+	//test folder owner
+	$owner = posix_getgrgid( filegroup( __FILE__) );
+	if($owner && $owner["name"] != "www-data")
+	{
+		showMessage("The group of this script is not 'www-data', this could be a problem. Ensure that all files inside this folder belong to the www-data by running this command from inside the folder: su chown -R :www-data *","danger");
+	}
+
 	if( $is_ready && !$force )
 	{
 		showMessage("All modules seem ready, nothing to do.","warning");
@@ -143,20 +165,50 @@ if(!$console)
 	}
 
 	//RESTART
-	if($force || !$is_ready)
+	if( ($force || !$is_ready))
 	{
-		clearDebugLog();
-		showMessage("Creating databases and folders","primary");
-		$system->restartSystem();
-
-		//READY
-		if( $system->checkReady() )
-			showMessage("LiteFileServer installed, you can go to the <a href='index.html'>main page</a>.","success");
+		if(!$allow_restart)
+			showMessage("RESTART is blocked, allow_restart in install.php is set to false.","warning");
 		else
 		{
-			showMessage("Something went wrong.","warning");
-			if(!$console) 
-				echo('<div class="bs-callout bs-callout-<?=$type?>" id="callout-glyphicons-empty-only">' . getLog() . "</div>");
+			clearDebugLog();
+			showMessage("Creating databases and folders","primary");
+
+			//Forcing the user prompt
+			if($is_ready)
+			{
+				if($console)
+				{
+					$input = read_input("\033[1;33mYou are about to erase all the data and files inside LFS.\nIf you are sure type '".$restart_code."': \033[0m");
+					if($input != $restart_code)
+					{
+						showMessage("Operation canceled.");
+						die($end_string);
+					}
+					else
+						showMessage("Database restart in course.");
+				}
+				else
+				{
+					showMessage("Complete DATABASE restart can only be performed from the console using: php install.php force");
+					die($end_string);
+				}
+			}
+
+			$system->restartSystem();
+
+			//TEST SAVING ONE FILE
+			//TEST RETRIEVING THAT FILE
+
+			//READY
+			if( $system->checkReady() )
+				showMessage("LiteFileServer installed, you can go to the <a href='index.html'>main page</a>.","success");
+			else
+			{
+				showMessage("Something went wrong.","warning");
+				if(!$console) 
+					echo('<div class="bs-callout bs-callout-<?=$type?>" id="callout-glyphicons-empty-only">' . getLog() . "</div>");
+			}
 		}
 	}
 

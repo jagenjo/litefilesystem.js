@@ -20,6 +20,7 @@ define('GLOBAL_PASS_SALT','pepper salt and other herbs'); //ENTER SOMETHING RAND
 define('UNITNAME_SALT','sausages bacon and spam'); //ENTER SOMETHING RANDOM HERE
 
 //Config *************************
+define('BACKUPS_FOLDER', '../backup' ); //folder to store the backups
 define('ALLOW_WEB_REGISTRATION', true ); //allow people to create users
 define('ALLOW_BIG_FILES', true ); //allow big files to be uploaded by parts
 define('DEFAULT_USER_SPACE', 10 ); //in MBs

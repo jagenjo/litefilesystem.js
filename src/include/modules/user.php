@@ -763,10 +763,10 @@ class UsersModule
 	//check if token is valid, returns user associated to this token
 	public function checkToken($token, $keep_info = false)
 	{
-		$database = getSQLDB();
-
 		if(self::$MASTER_TOKEN != "" && $token == self::$MASTER_TOKEN)
 			return $this->getUser(1); //return admin
+
+		$database = getSQLDB();
 
 		$token = addslashes($token);
 
@@ -795,6 +795,15 @@ class UsersModule
 
 		return $this->getUser( $item->user_id, $keep_info );
 	}
+
+	public function isAdmin($token)
+	{
+		$user = $this->checkToken($token);
+		if(!$user || !isset($user->roles["admin"]) || !$user->roles["admin"] )
+			return false;
+		return true;
+	}
+
 
 	public function expireSession( $token )
 	{
@@ -1076,14 +1085,20 @@ class UsersModule
 		$size = intval($size);
 
 		if($size == 0) 
+		{
+			debug("Cannot set size to 0");
 			return false;
+		}
 
 		$database = getSQLDB();
 		$query = "UPDATE `".DB_PREFIX."users` SET `total_space` = '".$size."' WHERE `id` = '".$id."';";
 
 		$result = $database->query( $query );
 		if($database->affected_rows == 0)
+		{
+			debug("Affected rows is 0 after changing user total_space");
 			return false;
+		}
 		return true;
 	}
 

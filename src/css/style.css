@@ -274,7 +274,7 @@ textarea {
 }
 
 
-#setup-unit-dialog .users {
+#setup-unit-dialog .users, #backups-dialog .backups {
 	height: 400px;
 	overflow: auto;
 }
@@ -283,7 +283,7 @@ textarea {
 	opacity: 0.5;
 }
 
-.unit-user-item {
+.unit-user-item, .backup-item {
 	font-size: 1.4em;
 	width: 94%;
 	margin: 10px;
@@ -292,15 +292,24 @@ textarea {
 	border-radius: 4px;
 }
 
-.unit-user-item .username {
+
+.unit-user-item .username, .backup-item .name {
 	display: inline-block;
+}
+
+.backup-item .info {
+	font-size: 0.8em;
+}
+
+.backup-item .info span {
+	margin-right: 20px;
 }
 
 .unit-user-item.admin-role {
 	background-color: #ED9;
 }
 
-.unit-user-item .dropdown {
+.unit-user-item .dropdown, .backup-item .dropdown {
 	float: right;
 	display: inline-block;
 }

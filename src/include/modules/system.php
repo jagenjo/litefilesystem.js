@@ -15,10 +15,18 @@ class SystemModule
 	public function processAction($action)
 	{
 		$this->result = Array();
-		$this->result["debug"] = Array();
+		$this->result["debug"] = Array();//??
 
 		if ($action == "ready")
 			$this->actionCheckReady();
+		else if ($action == "backups")
+			$this->actionListBackups();
+		else if ($action == "createBackup")
+			$this->actionCreateBackup();
+		else if ($action == "restoreBackup")
+			$this->actionRestoreBackup();
+		else if ($action == "deleteBackup")
+			$this->actionDeleteBackup();
 		else
 		{
 			//nothing
@@ -45,6 +53,137 @@ class SystemModule
 		}
 
 		$this->restartSystem();
+	}
+
+	public function actionListBackups()
+	{
+		if(!isset($_REQUEST["token"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'not allowed';
+			return;
+		}
+		
+		$login = getModule("user");
+		$is_admin = $login->isAdmin( $_REQUEST["token"] );
+		if(!$is_admin )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'not admin';
+			return;
+		}
+
+		$this->result["data"] = $this->getBackupsList();
+	}
+
+	public function actionCreateBackup()
+	{
+		if(!isset($_REQUEST["token"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'not allowed';
+			return;
+		}
+
+		if(!isset($_REQUEST["name"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'param missing';
+			return;
+		}
+		
+		$login = getModule("user");
+		$is_admin = $login->isAdmin( $_REQUEST["token"] );
+		if(!$is_admin )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'not admin';
+			return;
+		}
+
+		if( !$this->createBackup( $_REQUEST["name"] ) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'backup not created';
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["data"] = $this->getBackupsList();
+		$this->result["msg"] = 'backup created';
+	}
+
+	public function actionRestoreBackup()
+	{
+		if(!isset($_REQUEST["token"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'not allowed';
+			return;
+		}
+
+		if(!isset($_REQUEST["name"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'param missing';
+			return;
+		}
+
+		$login = getModule("user");
+		$is_admin = $login->isAdmin( $_REQUEST["token"] );
+		if(!$is_admin )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'not admin';
+			return;
+		}
+
+		if( !$this->restoreBackup( $_REQUEST["name"] ) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'backup not restored';
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["msg"] = 'backup restored';
+	}
+
+	public function actionDeleteBackup()
+	{
+		if(!isset($_REQUEST["token"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'not allowed';
+			return;
+		}
+
+		if(!isset($_REQUEST["name"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'param missing';
+			return;
+		}
+
+		$login = getModule("user");
+		$is_admin = $login->isAdmin( $_REQUEST["token"] );
+		if(!$is_admin )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'not admin';
+			return;
+		}
+
+		if( !$this->deleteBackup( $_REQUEST["name"] ) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'backup not restored';
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["data"] = $this->getBackupsList();
+		$this->result["msg"] = 'backup deleted';
 	}
 
 
@@ -75,6 +214,16 @@ class SystemModule
 
 	public function checkReady()
 	{
+		//check global info
+		$owner = posix_getgrgid( filegroup( __FILE__ ) );
+		if($owner)
+		{
+			if($owner["name"] != "www-data")
+			{
+				debug("The group of this script is not 'www-data', this could be a problem. Ensure that all files inside this folder belong to the group 'www-data' by running this command from inside the folder: su chown -R :www-data *");
+			}
+		}
+
 		//for every module
 		$modules = loadModules("*");
 		foreach($modules as $module)
@@ -130,6 +279,8 @@ class SystemModule
 	private static function delTree( $dir )
 	{
 		$path = "./";
+		if(!is_dir($path . $dir))
+			return;
 		$files = array_diff(scandir($path . $dir), array('.','..'));
 		foreach ($files as $file) {
 		  (is_dir($path . "$dir/$file")) ? self::delTree("$dir/$file") : unlink($path . "$dir/$file");
@@ -137,18 +288,53 @@ class SystemModule
 		return rmdir($path . $dir);
 	} 
 
-	public function backup( $filename )
+	public function getBackupsList()
 	{
-		//create backup folder
-		if(!is_dir("../backup"))
+		$result = Array();
+		if(!is_dir(BACKUPS_FOLDER))
+			return $result;
+
+		foreach ( glob( BACKUPS_FOLDER . "/*.sql") as $filename )
 		{
-			mkdir( "../backup" );  
-			chmod( "../backup", 0775);
+			$name = basename($filename,".sql");
+			$time = filemtime($filename);
+			$size = filesize( BACKUPS_FOLDER . "/" . $name . ".tar.gz");
+			$backup_info = Array( "time" => $time, "name" => $name, "pretty_time" => date ("F d Y H:i:s", $time ), "size" => $size );
+			$result[] = $backup_info;
 		}
 
-		if(is_file("../backup/".$filename.".sql"))
+		return $result;
+
+		/*
+		$files = array_diff( scandir( BACKUPS_FOLDER ), array('.','..') );
+		foreach ($files as $file) 
 		{
-			debug("There is another backup, delete it first","red");
+			if (is_dir("$dir/$file") && $file[0] != "_" )
+			{
+				$folders[$file] = $this->getSubfolders("$dir/$file");
+			}
+		}
+		*/
+	}
+
+	public function createBackup( $filename )
+	{
+		if( !preg_match('/^[0-9a-zA-Z\_\- ... ]+$/', $filename) )
+		{
+			debug("Invalid backup name");
+			return false;
+		}
+
+		//create backup folder
+		if(!is_dir(BACKUPS_FOLDER))
+		{
+			mkdir( BACKUPS_FOLDER );  
+			chmod( BACKUPS_FOLDER, 0775);
+		}
+
+		if(is_file( BACKUPS_FOLDER ."/".$filename.".sql"))
+		{
+			debug("There is another backup, delete it first");
 			return false;
 		}
 
@@ -157,7 +343,7 @@ class SystemModule
 
 		//dump DB
 		debug("Saving DB...");
-		$cmd = "mysqldump -u".DB_USER." -p".DB_PASSWORD." ".DB_NAME." " . join(" ",$table_names) . " >  ../backup/".$filename.".sql";
+		$cmd = "mysqldump -u".DB_USER." -p".DB_PASSWORD." --skip-add-drop-table ".DB_NAME." " . join(" ",$table_names) . " >  ../backup/".$filename.".sql";
 		//debug( $cmd );
 		exec( $cmd );
 
@@ -169,10 +355,39 @@ class SystemModule
 		return true;
 	}
 
-	public function restore($filename)
+	public function deleteBackup( $filename )
 	{
+		if( !preg_match('/^[0-9a-zA-Z\_\- ... ]+$/', $filename) )
+		{
+			debug("Invalid backup name");
+			return false;
+		}
+
 		//create backup folder
-		if(!is_dir("../backup") || !is_file("../backup/".$filename.".sql") || !is_file("../backup/".$filename.".tar.gz"))
+		if(!is_dir( BACKUPS_FOLDER ) || !is_file( BACKUPS_FOLDER . "/" . $filename . ".sql") || !is_file(BACKUPS_FOLDER . "/" . $filename . ".tar.gz" ))
+		{
+			debug("Backup not found","red");
+			return false;
+		}
+
+		unlink(BACKUPS_FOLDER . "/" . $filename . ".sql");
+		unlink(BACKUPS_FOLDER . "/" . $filename . ".tar.gz");
+
+		return true;
+	}
+
+	public function restoreBackup( $filename, $dump_only = false )
+	{
+		global $database;
+
+		if( !preg_match('/^[0-9a-zA-Z\_\- ... ]+$/', $filename) )
+		{
+			debug("Invalid backup name");
+			return false;
+		}
+
+		//create backup folder
+		if(!is_dir( BACKUPS_FOLDER ) || !is_file( BACKUPS_FOLDER . "/" . $filename . ".sql") || !is_file(BACKUPS_FOLDER . "/" . $filename . ".tar.gz" ))
 		{
 			debug("Backup not found","red");
 			return false;
@@ -187,25 +402,43 @@ class SystemModule
 		*/
 
 		//restore SQL
-		$sql_data = file_get_contents("../backup/".$filename.".sql", true);
-		//$result = $database->query( $sql_data );
+		$sql_data = file_get_contents( BACKUPS_FOLDER . "/" . $filename . ".sql", true);
 
 		//unzip to folder
 		debug("Decompressing FILES (this could take some time)...");
-		if(1)
+		if( $dump_only ) //dump to backup folder
 		{
-			if(is_dir("../backup/files"))
-				self::delTree( "../backup/files" );
-			mkdir( "../backup/files" );  
-			chmod( "../backup/files", 0775);
-			$cmd = "tar -xvzf ../backup/".$filename.".tar.gz -C ../backup/files";
+			if(is_dir(BACKUPS_FOLDER . "/files"))
+				self::delTree( BACKUPS_FOLDER . "/files" );
+			mkdir( BACKUPS_FOLDER . "/files" );  
+			chmod( BACKUPS_FOLDER . "/files", 0775);
+			$cmd = "tar -xvzf " . BACKUPS_FOLDER . "/".$filename.".tar.gz -C ".BACKUPS_FOLDER."/files";
+			exec( $cmd );
 		}
-		else
+		else //delete old content
 		{
+			//load SQL
+			$cmd = "mysql -u".DB_USER." -p".DB_PASSWORD." ".DB_NAME." < ".BACKUPS_FOLDER."/".$filename.".sql";
+			//debug( $cmd );
+			exec( $cmd );
+
+			/*
+			$result = $database->query( $sql_data );
+			if(!$result)
+			{
+				debug("Problem loading the DATABASE:\n " . $database->error);
+				return false;
+			}
+			*/
+
+			//extract files
 			self::delTree( FILES_PATH );
-			$cmd = "tar -xvzf ../backup/".$filename.".tar.gz -C " . FILES_PATH; 
+			mkdir( FILES_PATH );  
+			chmod( FILES_PATH, 0775);
+			$cmd = "tar -xvzf " . BACKUPS_FOLDER."/".$filename.".tar.gz -C " . FILES_PATH; 
+			exec( $cmd );
 		}
-		exec( $cmd );
+
 
 		return true;
 	}

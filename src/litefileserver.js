@@ -788,6 +788,7 @@ Session.prototype.getFileInfo = function( fullpath, on_complete )
 	});
 }
 
+
 /**
 * Uploads a file to the server (it allows to send other info too like preview)
 * @method uploadFile
@@ -1194,6 +1195,48 @@ Session.prototype.deleteFile = function( fullpath, on_complete, on_error )
 			on_complete(resp.status == 1, resp);
 	}, on_error );
 }
+
+//ADMIN BACKUPS STUFF
+Session.prototype.getBackupsList = function( on_complete )
+{
+	var params = {action: "system/backups"};
+	return this.request( this.server_url, params, function(resp){
+		console.log(resp);
+		if(on_complete)
+			on_complete( resp.status == 1, resp );
+	});
+}
+
+Session.prototype.createBackup = function( name, on_complete )
+{
+	var params = {action: "system/createBackup", name: name };
+	return this.request( this.server_url, params, function(resp){
+		console.log(resp);
+		if(on_complete)
+			on_complete( resp.status == 1, resp );
+	});
+}
+
+Session.prototype.restoreBackup = function( name, on_complete )
+{
+	var params = {action: "system/restoreBackup", name: name };
+	return this.request( this.server_url, params, function(resp){
+		console.log(resp);
+		if(on_complete)
+			on_complete( resp.status == 1, resp );
+	});
+}
+
+Session.prototype.deleteBackup = function( name, on_complete )
+{
+	var params = {action: "system/deleteBackup", name: name };
+	return this.request( this.server_url, params, function(resp){
+		console.log(resp);
+		if(on_complete)
+			on_complete( resp.status == 1, resp );
+	});
+}
+
 
 global.LFS = global.LiteFileServer = LiteFileServer;
 

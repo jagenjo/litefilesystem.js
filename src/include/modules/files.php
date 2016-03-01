@@ -7,8 +7,8 @@ class FilesModule
 	private static $MAX_UNITS_PER_USER = 5; 
 	private static $MAX_USERS_PER_UNIT = 10;
 	private static $DEFAULT_UNIT_SIZE = 5000000;
-	private static $UNIT_MIN_SIZE = 50000; //in bytes
-	private static $UNIT_MAX_SIZE = 100000000; //in bytes
+	private static $UNIT_MIN_SIZE = 1048576; //in bytes
+	private static $UNIT_MAX_SIZE = 209715200; //in bytes
 	private static $PREVIEW_IMAGE_SIZE = 128; //in pixels
 	private static $MAX_PREVIEW_FILE_SIZE = 300000;//in bytes
 	private static $ALLOW_REMOTE_FILES = ALLOW_REMOTE_FILE_DOWNLOADING; //allow to download remote files
@@ -2468,7 +2468,7 @@ class FilesModule
 		$filename = $this->clearPathName( $filename );
 
 		//unit
-		$unit = $this->getUnit( $unit_id ); // $user_id)
+		$unit = $this->getUnit( $unit_id ); // $user_id) //this functions doesnt control privileges
 		if(!$unit)
 		{
 			debug("ERROR: Unit not found: " . $unit_id);
@@ -2491,11 +2491,15 @@ class FilesModule
 				return null;
 			}
 
-			if($file_info->author_id != $user_id)
+			if($file_info->author_id != $user_id )
 			{
-				debug("user removing file that doesnt belongs to him");
-				$this->last_error = "File belongs to other user";
-				return null;
+				$unit = $this->getUnit( $unit_id, $user_id ); 
+				if( $unit->mode != "ADMIN") //WARNING!!! WHAT ABOUT THE QUOTA, IT WILL BE APPLYED TO HIM INSTEAD OF THE AUTHOR
+				{
+					debug("user removing file that doesnt belongs to him");
+					$this->last_error = "File belongs to other user";
+					return null;
+				}
 			}		
 			$id = $file_info->id;	
 			debug("file found with the same name, overwriting");
@@ -3630,7 +3634,7 @@ class FilesModule
 		return $files;		
 	}
 
-	public function searchFilesFromDBByCategory($unit_id, $category, $limit = 50, $offset = 0)
+	public function searchFilesFromDBByCategory($unit_id, $category, $limit = 100, $offset = 0)
 	{
 		$category = addslashes($category);
 
