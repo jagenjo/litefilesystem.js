@@ -1,3 +1,44 @@
+
+html,body {
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+    color: #9696A1;
+    background-color: #22222A;
+}
+
+.form-control {
+	background-color: #4D4D4D;
+	border: 1px solid #4C4C4C;
+	color: #D3D0D0;
+}
+
+.close {
+	color: white;
+}
+
+.btn-default {
+	background-color: #7C7C7C;
+	border-color: #3E3838;
+}
+
+.btn-primary {
+	background-color: #436C90;
+}
+
+.modal-header {
+	border-bottom: 1px solid #575F70;
+}
+
+.modal-content {
+	background-color: #333 !important;
+}
+
+.modal-footer {
+	border-top: 1px solid #575F70;
+}
+
 .startup-dialog, .login-dialog {
 	width: 300px;
 }
@@ -15,19 +56,58 @@ body {
 	padding-top: 50px;
 }
 
+button {
+	color: #999;
+	background-color: #484848;
+}
+
 button:focus {
 	outline:0 !important;
 }
 
+.dashboard {
+	position: relative;
+}
+
+.dashboard, .files-manager {
+	margin-top: 20px;
+	height: calc( 100% - 20px );
+}
+
+.folders, .files {
+	height: 100%;
+	width: 30%;
+	position: absolute;
+	top: 0;
+	left: 0;
+    background-color: #22222A;
+    color: #949494;
+}
+
+.files {
+	left: auto;
+	width: 70%;
+	right: 0;
+}
+
+.tools {
+	padding: 10px 10px;
+	height: 50px;
+}
+
 .folders-table, .files-table {
-	border: 1px solid #DDD;
-	height: 500px;
+	border: 1px solid black;
+	height: calc( 100% - 60px );
 	overflow: auto;
 }
 
+ .files-table {
+	background-color: #1C1C22;
+ }
+
 .folders-table .header, .files-table  .header{
 	width: 100%;
-	border-bottom: 1px solid #DDD;
+	border-bottom: 1px solid black;
 }
 
 .folders-table .header h3 {
@@ -36,18 +116,29 @@ button:focus {
 }
 
 .folders-table .content {
-	padding: 20px;
 }
 
 .folder-item {
 	padding-left: 2em;
 	width: 100%;
 	cursor: pointer;
+	transition: all 0.1s;
 }
 
+.folder-item:nth-child(even)
+{
+    background-color: #1E1E25;
+}
+
+
 .folder-item .glyphicon {
-	color: #888;
+	color: #3F4460;
 	padding: 0 0.5em;
+}
+
+.folder-item.selected .glyphicon {
+	color: #A2A9CF;
+	transition: all 0.1s;
 }
 
 .folder-item .name {
@@ -55,14 +146,26 @@ button:focus {
 	padding-left: 0.3em;
 	font-size: 1.2em;
 	border-radius: 2px;
+	transition: all 0.1s;
 }
 
-.folder-item:hover {
-	background-color: #EEF;
+.folder-item:hover:not(.selected) {
+	background-color: #353546;
+	transition: all 0.1s;
 }
 
 .folder-item.selected {
-	background-color: #DDF;
+	background-color: #545486;
+	color: white;
+	transition: all 0.1s;
+}
+
+.folder-item.selected .name {
+	color: white;
+}
+
+.files-table .content {
+	padding: 10px;
 }
 
 .file-item {
@@ -71,13 +174,25 @@ button:focus {
 	height: 128px;
 	overflow: hidden;
 	margin: 3px;
-	background-color: white;
-	border: 2px solid #AAA;
+	background-color: black;
+	border: 2px solid #2E3E60;
 	border-radius: 2px;
 	display: inline-block;
 	cursor: pointer;
 	box-shadow: 0 2px 2px rgba(0,0,0,0.3);
 }
+
+.file-item.selected {
+	border: 2px solid white;
+}
+
+/*
+.file-item:hover {
+	transform: scale(1.2);
+	transition: all 0.1s;
+	z-index: 100;
+}
+*/
 
 .file-item .filename {
 	position: absolute;
@@ -122,30 +237,34 @@ button:focus {
 
 .file-item img {
 	max-width: 128px;
+	opacity: 0.1;
+	transition: all 0.3s;
 }
 
+.file-item.loaded img {
+	opacity: 1;
+}
 
 .file-row-item {
 	cursor: pointer;
 	padding: 0.2em;
 	padding-left: 10px;
 	border-radius: 2px;
-	background-color: #FAFAFA;
 }
 
 .file-row-item:hover {
-	background-color: #EEE;
+	background-color: #333;
 }
 
 .file-row-item .filename {
 	font-size: 1.5em;
 	display: inline-block;
-	width: 60%;
+	width: calc( 100% - 200px);
 }
 
 .file-row-item .buttons {
 	opacity: 0.1;
-	width: 30%;
+	width: 200px;
 	text-align: right;
 }
 
@@ -153,8 +272,41 @@ button:focus {
 	opacity: 1;
 }
 
-.tools {
-	padding: 10px 0;
+#fileinfo-dialog .info {
+	margin-top: 10px;
+	min-height: 300px;
+	overflow: auto;
+}
+
+#fileinfo-dialog .info .varname {
+	width: 100px;
+	display: inline-block;
+	color: #C5C5C5;
+}
+
+#fileinfo-dialog .preview {
+	float: right;
+	width: 276px;
+	height: 276px;
+	overflow: auto;
+	margin: 2px;
+	padding: 10px;
+	background-color: black;
+	text-align: center;
+	vertical-align: middle;
+}
+
+#fileinfo-dialog .delete-button {
+	float: left;
+}
+
+.path {
+	color: #B8B7B7;
+}
+
+.path .slash {
+	margin: 0 4px;
+	color: #35CDC6;
 }
 
 textarea {
@@ -169,7 +321,7 @@ textarea {
 {
     margin-top: 20px;
     padding: 20px 0px;
-    background-color: #f7f7f7;
+    background-color: #333;
     -moz-box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.3);
     -webkit-box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.3);
     box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.3);
@@ -200,12 +352,32 @@ textarea {
 	line-height: 1.5em;
 }
 
+/*
+.navbar-toggle {
+	position: absolute;
+	top: 0;
+	right: 0;
+}
+*/
+
+.navbar-header2 {
+	float: left;
+}
+
 .units-list {
 	border-radius: 2px;
-	width: 100%;
-	min-height: 80px;
 	margin: 10px 0;
 	padding: 0px;
+	white-space: nowrap;
+}
+
+.units-list button {
+	color: #999;
+	background-color: #484848;
+}
+
+.units-list button:hover {
+	color: white;
 }
 
 .units-list .title {
@@ -230,14 +402,13 @@ textarea {
 	margin-top: 4px;
 	margin-bottom: 0px;
 	transition: all 0.2s;
-	color: #666;
 }
 
 .unit-item.selected {
-	background-color: #EEE !important;
-	border-bottom: 4px solid #DDD;
+	background-color: #6B6A80 !important;
+	border-bottom: 4px solid #4C4D6A;
 	margin-top: 0;
-	color: #000;
+	color: white;
 }
 
 .unit-item .unit-size {
@@ -288,7 +459,7 @@ textarea {
 	width: 94%;
 	margin: 10px;
 	padding: 10px;
-	background-color: #EEE;
+	background-color: #4A4A55;
 	border-radius: 4px;
 }
 
@@ -306,7 +477,7 @@ textarea {
 }
 
 .unit-user-item.admin-role {
-	background-color: #ED9;
+	background-color: #5C5543;
 }
 
 .unit-user-item .dropdown, .backup-item .dropdown {
@@ -337,3 +508,4 @@ textarea {
 }
 
 .slider { width: 100% !important; }
+

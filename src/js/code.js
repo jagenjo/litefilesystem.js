@@ -4,6 +4,7 @@ var filesview_mode = "thumbnails";
 var units = {};
 var current_unit = "";
 var current_folder = "";
+var current_file_item = null;;
 
 
 //start up
@@ -56,6 +57,11 @@ function systemReady()
 				bootbox.alert(result.msg);
 
 		});
+	});
+
+	$("#login-dialog #inputPassword").on("keydown",function(e){
+		if(e.keyCode == 13)
+			$("#login-dialog .submit-button").click();
 	});
 
 	//FORGOT PASSWORD
@@ -209,6 +215,13 @@ function systemReady()
 					});						
 				});
 
+
+				var download_backup_button = $(elem).find(".download-backup-button");
+				download_backup_button[0].dataset["backup_link"] = backup.link;
+				download_backup_button.click(function(){
+					window.location = this.dataset["backup_link"];
+				});
+
 				var restore_backup_button = $(elem).find(".restore-backup-button");
 				restore_backup_button[0].dataset["backup_name"] = backup.name;
 				restore_backup_button.click(function(){
@@ -240,6 +253,7 @@ function systemReady()
 		}, session.user.token );
 	}
 
+	//BACKUPS
 	$(".create-backup-button").click(function(){
 		bootbox.prompt({ title:"Create Backup",
 			value: "backup_" + (new Date()).getTime(),
@@ -262,6 +276,7 @@ function systemReady()
 		}); 
 	});
 
+	//USER INFO
 	$("#userinfo-dialog .usernameInput").keydown(function(event){
 		if(event.keyCode == 13) {
 		  $("#userinfo-dialog .search-user-button").click();
@@ -337,6 +352,15 @@ function systemReady()
 		return true;
 	});
 
+	//FILE INFO
+	$("#fileinfo-dialog .delete-button").click( onDeleteFile );
+	$("#fileinfo-dialog .edit-button").click( onEditFile );
+	$("#fileinfo-dialog .rename-button").click( onRenameFile );
+
+	$("#fileinfo-dialog .open-button").click( function(e) {
+		var url = this.dataset["url"];
+		window.open(url,"_blank");
+	});
 
 	//check existing session
 	LiteFileServer.checkExistingSession( function( server_session ) {
@@ -575,9 +599,9 @@ function refreshFolders( unit_name, on_complete )
 		{
 			var elem = document.createElement("div");
 			elem.dataset["folder"] = name;
-			elem.dataset["path"] = unit_name + "/" + path;
+			elem.dataset["path"] =  LFS.clearPath( unit_name + "/" + path );
 			elem.style.paddingLeft = (20 * level).toFixed() + "px";
-			elem.className = "folder-item folder-item-" + path.replace(/\//g,"__");
+			elem.className = "folder-item folder-item-" + elem.dataset["path"].replace(/\//g,"__");
 
 			elem.innerHTML = "<span class='glyphicon' aria-hidden='true'></span> <span class='name'>" + (name||"/") + "</span>";
 			$(root).append(elem);
@@ -651,7 +675,7 @@ function refreshFiles( fullpath, on_complete )
 	var info = LFS.parsePath(fullpath,true);
 
 	//change current folder
-	current_folder = info.folder;
+	current_folder = LFS.clearPath( info.folder );
 
 	if(current_unit != info.unit)
 	{
@@ -662,7 +686,8 @@ function refreshFiles( fullpath, on_complete )
 	$(".folder-item").removeClass("selected");
 	$(".folder-item .glyphicon").removeClass("glyphicon-folder-open").addClass("glyphicon-folder-close");
 
-	var folder_class = current_folder.replace(/\//g,"__"); 
+	//select folder
+	var folder_class = LFS.clearPath( current_unit + "/" + current_folder).replace(/\//g,"__"); 
 	$(".folder-item-" + folder_class ).addClass("selected");
 	$(".folder-item-" + folder_class + " .glyphicon").addClass("glyphicon-folder-open").removeClass("glyphicon-folder-close");
 
@@ -690,12 +715,18 @@ function refreshFiles( fullpath, on_complete )
 			item.dataset["unit"] = info.unit;
 			item.dataset["folder"] = info.folder;
 			item.dataset["filename"] = file.filename;
+			item.dataset["preview"] = LFS.getPreviewPath( file.fullpath );
+			item.dataset["size"] = file.size;
+			item.dataset["author"] = file.author_username;
+			item.dataset["date"] = file.timestamp;
+			item.dataset["url"] = LFS.files_path + file.fullpath;
 
 			if(filesview_mode == "thumbnails")
 			{
 				var img = new Image();
-				img.src = LFS.getPreviewPath( file.fullpath );
+				img.src = item.dataset["preview"];
 				img.onerror = function() { this.parentNode.removeChild(this); };
+				img.onload = function(){ this.parentNode.classList.add("loaded") }
 				$(item).append(img);
 			}
 
@@ -704,6 +735,29 @@ function refreshFiles( fullpath, on_complete )
 
 			$(item).find(".checkbox").on("click", function(e){
 				$(this.parentNode).toggleClass("selected");
+				e.stopPropagation();
+			});
+
+			$(item).click(function(){
+				$(root).find(".selected").removeClass("selected");
+				$(this).addClass("selected");
+			});
+
+			$(item).dblclick(function(){
+				var dialog = $("#fileinfo-dialog");
+				var path = "<span class='path'>" + this.dataset["path"].split("/").join("<span class='slash'>/</span>") + "</span>";
+				dialog.find(".inputName").html( path );
+				var img = dialog.find("img")[0];
+				img.style.display = "";
+				img.onerror = function(){ this.style.display = "none"; }
+				img.setAttribute("src", this.dataset["preview"] );
+				dialog.find(".var[data-var='size'] .varvalue").html( LFS.getSizeString( this.dataset["size"] ));
+				dialog.find(".var[data-var='author'] .varvalue").html( this.dataset["author"] );
+				dialog.find(".var[data-var='date'] .varvalue").html( this.dataset["date"] );
+
+				dialog.find("button").attr("data-path",this.dataset["path"]);
+				dialog.find(".open-button")[0].dataset["url"] = this.dataset["url"];
+				dialog.modal("show");
 			});
 
 			//draggable
@@ -712,6 +766,8 @@ function refreshFiles( fullpath, on_complete )
 				console.log("::", e.dataTransfer.getData("text/path") );
 			    //e.dataTransfer.setDragImage(crt, 0, 0);
 			},false);
+
+			$(item).find("button").attr("path", item.path );
 		}
 
 		/*
@@ -719,66 +775,13 @@ function refreshFiles( fullpath, on_complete )
 			$(root).append("<div class='file-row-item'>No files found</div>");
 		*/
 
-		//delete
-		$(root).find(".deletefile-button").click(function(e){
 
-			var fullpath = this.parentNode.parentNode.dataset["path"];
-
-			bootbox.confirm("Are you sure?", function(result) {
-				if(result)
-					session.deleteFile( fullpath, function(status, resp){
-						if(status)
-						{
-							console.log("deleted");
-							if(resp.unit)
-								refreshUnitInfo( resp.unit );
-							refreshFiles( current_unit + "/" + current_folder );
-						}
-					}, function(err){
-						if(!status)
-							bootbox.alert("File not deleted: " + err);
-					});
-			}); 
-		});
-
-		//rename
-		$(root).find(".renamefile-button").click(function(e){
-
-			var tr = this.parentNode.parentNode;
-			var fullpath = tr.dataset["path"];
-			bootbox.prompt({ title:"New filename",
-				value: tr.dataset["filename"],
-				callback: function(result) {
-					if(!result)
-						return;
-
-					var file = LFS.parsePath( fullpath );
-					file.filename = result;
-					var new_fullpath = file.getFullpath();
-					session.moveFile( fullpath, new_fullpath, function(moved, resp){
-						console.log("renamed");
-						refreshFiles( current_folder );
-					}, function(err){
-						bootbox.alert(err || "Cannot move file");
-					});
-				}
-			}); 
-		});
-
-		//edit
-		$(root).find(".editfile-button").click(function(e){
-
-			var tr = this.parentNode.parentNode;
-			var fullpath = tr.dataset["path"];
-			var filename = tr.dataset["filename"];
-			editFile( fullpath, filename );
-		});//click
-
-		//watch thumb
+		//actions
+		$(root).find(".deletefile-button").click( onDeleteFile );
+		$(root).find(".renamefile-button").click( onRenameFile );
+		$(root).find(".editfile-button").click( onEditFile );
 		$(root).find(".thumbfile-button").click(function(e){
-
-			var tr = this.parentNode.parentNode;
-			var path = LFS.getThumbPath( tr.dataset["path"] );
+			var path = LFS.getThumbPath( this.dataset["path"] );
 			window.open( path, "_blank" );
 		});//click
 
@@ -790,18 +793,61 @@ function refreshFiles( fullpath, on_complete )
 	});//request files
 }
 
-function editFile(fullpath, filename)
+function onRenameFile(e){
+	var fullpath = this.dataset["path"];
+	var info = LFS.parsePath(fullpath);
+	var filename = info.filename;
+	bootbox.prompt({ title:"New filename",
+		value: filename,
+		callback: function(result) {
+			if(!result)
+				return;
+			info.filename = result;
+			var new_fullpath = info.getFullpath();
+			session.moveFile( fullpath, new_fullpath, function(moved, resp){
+				console.log("renamed");
+				refreshFiles( current_folder );
+			}, function(err){
+				bootbox.alert(err || "Cannot move file");
+			});
+		}
+	}); 
+}
+
+
+function onDeleteFile(e){
+	var fullpath = this.dataset["path"];
+
+	bootbox.confirm("Are you sure?", function(result) {
+		if(result)
+			session.deleteFile( fullpath, function(status, resp){
+				if(status)
+				{
+					$("#fileinfo-dialog").modal("hide");
+					console.log("deleted");
+					if(resp.unit)
+						refreshUnitInfo( resp.unit );
+					refreshFiles( current_unit + "/" + current_folder );
+				}
+			}, function(err){
+				if(!status)
+					bootbox.alert("File not deleted: " + err);
+			});
+	}); 
+}
+
+function onEditFile()
 {
+	var fullpath = this.dataset["path"];
+	var info = LFS.parsePath(fullpath);
+	var filename = info.filename;
+
 	var textarea = null;
 	//retrieve file
 	LFS.requestFile( fullpath, function(data) {
 		bootbox.dialog({ title: filename,
 			message: "<textarea id='file-editor-content' class='form-control' rows='3'>" + data + "</textarea>",
 			buttons: {
-				cancel: {
-				  label: "Cancel",
-				  className: ""
-				},
 				success: {
 				  label: "Save",
 				  className: "btn-success",
@@ -813,6 +859,10 @@ function editFile(fullpath, filename)
 						bootbox.alert(err);
 					});
 				  }
+				},
+				cancel: {
+				  label: "Close",
+				  className: ""
 				}
 			}//buttons
 		});//dialog 

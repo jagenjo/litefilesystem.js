@@ -221,7 +221,7 @@ var LiteFileServer = {
 	},
 
 	//http request wrapper
-	request: function(url, params, on_complete, on_error, on_progress )
+	request: function(url, params, on_complete, on_error, on_progress, skip_parse )
 	{
 		var xhr = new XMLHttpRequest();
 		xhr.open( params ? 'POST' : 'GET' , url, true );
@@ -246,7 +246,7 @@ var LiteFileServer = {
 			}
 
 			var type = this.getResponseHeader('content-type');
-			if(type == "application/json")
+			if(!skip_parse && type == "application/json")
 			{
 				try
 				{
@@ -381,7 +381,7 @@ var LiteFileServer = {
 
 	requestFile: function(fullpath, on_complete, on_error)
 	{
-		this.request( this.files_path + "/" + fullpath, null, on_complete, on_error );
+		this.request( this.files_path + "/" + fullpath, null, on_complete, on_error, null, true );
 	}
 };
 	

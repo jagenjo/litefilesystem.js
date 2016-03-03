@@ -86,18 +86,29 @@
 </div>
 
 
-<div class="center-block dashboard" style="display:none">
+<div class="dashboard" style="display:none">
 
     <nav class="navbar navbar-inverse navbar-fixed-top">
-      <div class="container">
-        <div class="navbar-header">
+      <div class="container2">
+        <div class="navbar-header2">
+		<div class='units-list'>
+			<span class="content"></span>
+
+			<span class="visible-md-inline visible-lg-inline">
+				<button title="create unit" class="create-unit-button btn" data-dismiss="modal" data-toggle="modal" data-target="#new-unit-dialog"><span class="glyphicon glyphicon-hdd" aria-hidden="true"></span> <span class="glyphicon glyphicon-plus" aria-hidden="true"></span></button>
+				<button title="refresh units" class="refresh-units-button btn"><span class="glyphicon glyphicon-refresh" aria-hidden="true"></span></button>
+				<button title="setup units" class="setup-unit-button btn btn-primary" data-dismiss="modal" data-toggle="modal" data-target="#setup-unit-dialog"><span class="glyphicon glyphicon-cog" aria-hidden="true"></span></button>
+			</span>
+
           <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
             <span class="sr-only">Toggle navigation</span>
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="#">LiteFileServer Dashboard</a>
+
+		</div>
+
         </div>
         <div id="navbar" class="collapse navbar-collapse">
           <ul class="nav navbar-nav navbar-right">
@@ -115,22 +126,9 @@
       </div>
     </nav>
 
-	<div class="container">
-      <div class="">
-		<div class='units-list'>
-			<span class='title visible-md-inline visible-lg-inline'>Units</span>
-			<span class="content"></span>
+	<div class="files-manager">
 
-			<span class="visible-md-inline visible-lg-inline">
-				<button title="create unit" class="create-unit-button btn" data-dismiss="modal" data-toggle="modal" data-target="#new-unit-dialog"><span class="glyphicon glyphicon-hdd" aria-hidden="true"></span> <span class="glyphicon glyphicon-plus" aria-hidden="true"></span></button>
-				<button title="refresh units" class="refresh-units-button btn"><span class="glyphicon glyphicon-refresh" aria-hidden="true"></span></button>
-				<button title="setup units" class="setup-unit-button btn btn-primary" data-dismiss="modal" data-toggle="modal" data-target="#setup-unit-dialog"><span class="glyphicon glyphicon-cog" aria-hidden="true"></span></button>
-			</span>
-		</div>
-        <h1>Files Manager</h1>
-
-		<div class="row">
-		<div class='folders col-md-6'>
+		<div class='folders'>
 
 			<div class="tools">
 				<button title="create folder" class="create-folder-button btn btn-primary"><span class="glyphicon glyphicon-folder-close" aria-hidden="true"></span> New Folder</button>
@@ -138,15 +136,12 @@
 			</div>
 
 			<div class="folders-table">
-
-				<div class="header">
-					<h3>Folders</h3>
-				</div>
 				<div class='content'>
 				</div>
 			</div>
 		</div>
-		<div class='files col-md-6'>
+
+		<div class='files'>
 
 			<div class="tools">
 				<button title="create file" data-toggle="modal" data-target="#newfile-dialog" class="create-file-button btn btn-primary"><span class="glyphicon glyphicon-folder-close" aria-hidden="true"></span> Create File</button>
@@ -158,9 +153,6 @@
 			</div>
 
 			<div class="files-table">
-				<div class="header visible-md-block visible-lg-block">
-					Drag Files here
-				</div>
 				<div class="pull-left"></div> 
 
 				<div class='content'>
@@ -183,8 +175,6 @@
 				</div>
   		</div>
 
-	   </div>		
-	   </div>		
       </div>		
 	</div>
 
@@ -269,23 +259,28 @@
 <div id="fileinfo-dialog" class="modal fade">
    <div class="modal-dialog">
     <div class="modal-content">
-      <form class="form-newfile">
-      <div class="modal-header">
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-       <h2 class="form-signin-heading">File</h2>
-      </div>
       <div class="modal-body">
-        <label>Name</label>
-        <input name="filename" type="text" class="inputName form-control" placeholder="file name" value="" required autofocus>
-		<button title="save file name" class="save-filename-button btn btn-primary"><span class="glyphicon glyphicon-folder-close" aria-hidden="true"></span> New Folder</button>
-		<div class="preview">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <label>Full filename</label>
+        <div class="inputName form-control"></div>
+		<div class="info">
+			<div class="preview">
+				<img/>
+			</div>
+			<div class="metadata">
+				<p class="var" data-var="author"><span class='varname'>Author</span><span class='varvalue'></span></p>
+				<p class="var" data-var="size"><span class='varname'>Size</span><span class='varvalue'></span></p>
+				<p class="var" data-var="date"><span class='varname'>Date</span><span class='varvalue'></span></p>
+			</div>
 		</div>
       </div>
       <div class="modal-footer">
-        <button class="submit-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete</span></button>
-        <button class="submit-button btn btn-lg btn-primary ladda-button" data-style="slide-up" data-color="green" type="submit"><span class="ladda-label">Save</span></button>
+        <button class="delete-button btn btn-danger">Delete</button>
+        <button class="rename-button btn">Rename</button>
+        <button class="edit-button btn">Edit</button>
+        <button class="open-button btn">Open</button>
+        <button class="close-button btn btn-primary" data-dismiss="modal" aria-label="Close">Close</button>
       </div>
-      </form>
     </div><!-- /.modal-content -->
   </div><!-- /.modal-dialog -->
 </div><!-- /.modal -->
@@ -362,12 +357,12 @@
 		<div>
 			<a href="#" class="change-password-button text-center btn btn-lg btn-primary btn-block" data-toggle="modal" data-target="#changepassword-dialog" >Change password</a>
 			<a href="#" class="delete-account-button text-center btn btn-lg btn-primary btn-block">Delete my account</a>
-			<p class="admin-options">
-		       <h2 class="form-signin-heading">Administration</h2>
+			<div class="admin-options">
+		       <h2 class="form-admin-heading">Administration</h2>
 				<a href="#" class="new-account text-center btn btn-lg btn-primary btn-block ladda-button" data-dismiss="modal" data-toggle="modal" data-target="#signup-dialog">Create an account </a>
 				<a href="#" class="get-user-account text-center btn btn-lg btn-primary btn-block ladda-button"  data-dismiss="modal" data-toggle="modal" data-target="#userinfo-dialog">Get user profile</a>
 				<a href="#" class="show-backups text-center btn btn-lg btn-primary btn-block ladda-button"  data-dismiss="modal" data-toggle="modal" data-target="#backups-dialog">Backups</a>
-			</p>
+			</div>
 		</div>
       </div>
       <div class="modal-footer">
@@ -452,6 +447,7 @@
 			  </button>
 			  <ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="dropdownMenu1">
 				<li role="presentation"><a class='restore-backup-button' role="menuitem" tabindex="-1" href="#">Restore</a></li>
+				<li role="presentation"><a class='download-backup-button' role="menuitem" tabindex="-1" href="#">Download</a></li>
 				<li role="presentation"><a class='delete-backup-button' role="menuitem" tabindex="-1" href="#">Delete</a></li>
 			  </ul>
 			</div>

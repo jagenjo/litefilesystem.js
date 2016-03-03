@@ -294,12 +294,13 @@ class SystemModule
 		if(!is_dir(BACKUPS_FOLDER))
 			return $result;
 
-		foreach ( glob( BACKUPS_FOLDER . "/*.sql") as $filename )
+		foreach ( glob( BACKUPS_FOLDER . "/*.tar.gz") as $filename )
 		{
-			$name = basename($filename,".sql");
+			$name = basename($filename,".tar.gz");
 			$time = filemtime($filename);
-			$size = filesize( BACKUPS_FOLDER . "/" . $name . ".tar.gz");
-			$backup_info = Array( "time" => $time, "name" => $name, "pretty_time" => date ("F d Y H:i:s", $time ), "size" => $size );
+			$link = BACKUPS_FOLDER . "/" . $name . ".tar.gz";
+			$size = filesize( $link );
+			$backup_info = Array( "time" => $time, "name" => $name, "pretty_time" => date ("F d Y H:i:s", $time ), "size" => $size, "link"=>$link );
 			$result[] = $backup_info;
 		}
 
@@ -343,14 +344,16 @@ class SystemModule
 
 		//dump DB
 		debug("Saving DB...");
-		$cmd = "mysqldump -u".DB_USER." -p".DB_PASSWORD." --skip-add-drop-table ".DB_NAME." " . join(" ",$table_names) . " >  ../backup/".$filename.".sql";
+		$cmd = "mysqldump -u".DB_USER." -p".DB_PASSWORD." ".DB_NAME." " . join(" ",$table_names) . " >  ../backup_db.sql"; //--skip-add-drop-table
 		//debug( $cmd );
 		exec( $cmd );
 
 		//dump files...
 		debug("Compressing FILES (this could take some time)...");
-		$cmd = "tar -cvzf ../backup/".$filename.".tar.gz -C ". FILES_PATH ." .";
+		$cmd = "tar -cvzf ".BACKUPS_FOLDER."/".$filename.".tar.gz -C ". FILES_PATH ." . ../backup_db.sql";
 		exec( $cmd );
+
+		unlink( "../backup_db.sql" );
 
 		return true;
 	}
@@ -364,13 +367,12 @@ class SystemModule
 		}
 
 		//create backup folder
-		if(!is_dir( BACKUPS_FOLDER ) || !is_file( BACKUPS_FOLDER . "/" . $filename . ".sql") || !is_file(BACKUPS_FOLDER . "/" . $filename . ".tar.gz" ))
+		if(!is_dir( BACKUPS_FOLDER ) || !is_file(BACKUPS_FOLDER . "/" . $filename . ".tar.gz" ))
 		{
 			debug("Backup not found","red");
 			return false;
 		}
 
-		unlink(BACKUPS_FOLDER . "/" . $filename . ".sql");
 		unlink(BACKUPS_FOLDER . "/" . $filename . ".tar.gz");
 
 		return true;
@@ -387,7 +389,7 @@ class SystemModule
 		}
 
 		//create backup folder
-		if(!is_dir( BACKUPS_FOLDER ) || !is_file( BACKUPS_FOLDER . "/" . $filename . ".sql") || !is_file(BACKUPS_FOLDER . "/" . $filename . ".tar.gz" ))
+		if(!is_dir( BACKUPS_FOLDER ) || !is_file(BACKUPS_FOLDER . "/" . $filename . ".tar.gz" ))
 		{
 			debug("Backup not found","red");
 			return false;
@@ -400,9 +402,6 @@ class SystemModule
 		$query = "DROP TABLE IF EXISTS " . join(",",$table_names);
 		//$result = $database->query( $query );
 		*/
-
-		//restore SQL
-		$sql_data = file_get_contents( BACKUPS_FOLDER . "/" . $filename . ".sql", true);
 
 		//unzip to folder
 		debug("Decompressing FILES (this could take some time)...");
@@ -417,11 +416,6 @@ class SystemModule
 		}
 		else //delete old content
 		{
-			//load SQL
-			$cmd = "mysql -u".DB_USER." -p".DB_PASSWORD." ".DB_NAME." < ".BACKUPS_FOLDER."/".$filename.".sql";
-			//debug( $cmd );
-			exec( $cmd );
-
 			/*
 			$result = $database->query( $sql_data );
 			if(!$result)
@@ -437,6 +431,18 @@ class SystemModule
 			chmod( FILES_PATH, 0775);
 			$cmd = "tar -xvzf " . BACKUPS_FOLDER."/".$filename.".tar.gz -C " . FILES_PATH; 
 			exec( $cmd );
+
+			if(!is_file( FILES_PATH."/backup_db.sql" ))
+			{
+				debug("ERROR: DATABASE SQL NOT FOUND" );
+				return false;
+			}
+
+			//load SQL
+			$cmd = "mysql -u".DB_USER." -p".DB_PASSWORD." ".DB_NAME." < ".FILES_PATH."/backup_db.sql";
+			debug( $cmd );
+			exec( $cmd );
+			//unlink( FILES_PATH."/backup_db.sql" );
 		}
 
 
