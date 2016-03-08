@@ -1996,7 +1996,7 @@ class FilesModule
 		$info["upload_max_filesize"] = $max_upload;
 		$info["post_max_size"] = $max_post;
 		$info["memory_limit"] = $memory_limit;
-		$info["allow_big_files"] = EXTENSIONS_BIG_FILES;
+		$info["allow_big_files"] = ALLOW_BIG_FILES;
 
 		$info["max_filesize"] = $upload_mb * 1024*1024;
 		$info["max_units"] = self::$MAX_UNITS_PER_USER;
@@ -2010,6 +2010,7 @@ class FilesModule
 		$info["preview_prefix"] = PREVIEW_PREFIX;
 		$info["preview_sufix"] = PREVIEW_SUFIX;
 		$info["preview_max_filesize"] = self::$MAX_PREVIEW_FILE_SIZE;
+		$info["server_free_space"] = disk_free_space(".");
 	}
 
 	//remove extra slashes
@@ -2029,7 +2030,7 @@ class FilesModule
 			return null;
 		}
 
-		$pos = strpos($filename,"?");
+		$pos = strpos( $fullpath, "?");
 		if($pos != FALSE) //remove trailings url stuff
 			$fullpath = substr(0, $pos);
 	
@@ -2875,7 +2876,7 @@ class FilesModule
 	{
 		$path_info = $this->parsePath( $fullpath, true );
 
-		$filename = $path_info->unit . "/" . $path_info->folder . "/" . PREVIEW_PATH . $path_info->fullpath . PREVIEW_SUFIX;
+		$filename = $path_info->unit . "/" . $path_info->folder . "/" . PREVIEW_PREFIX . $path_info->filename . PREVIEW_SUFIX;
 
 		//no preview
 		if(!$this->fileExist( $filename ) )
@@ -2946,9 +2947,12 @@ class FilesModule
 		{
 			debug( "Filename: " . $file["tmp_name"] );
 			$this->result["status"] = -1;
-			$this->result["msg"] = 'error reading file data from REQ';
+			$this->result["msg"] = 'error reading file data in server, check server logs';
 			return false;
 		}
+
+		//erase tmp file (I discovered problems due to leaving the tmps files)
+		unlink( $file["tmp_name"] );
 
 		return $data;
 	}

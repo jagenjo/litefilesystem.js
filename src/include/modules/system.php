@@ -5,7 +5,7 @@ class SystemModule
 	//this is used to store the result of any call
 	private static $RESTART_CODE = "";
 	public $result = null;
-	public $version = "0.1a";
+	public $version = "0.2";
 
 	//called always
 	function __construct() {
