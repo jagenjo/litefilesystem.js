@@ -55,6 +55,7 @@ class FilesModule
 			case "uploadRemoteFile": $this->actionUploadRemoteFile(); break; //upload a file from URL
 			case "deleteFile": 	$this->actionDeleteFile(); break; //delete a file (by id)
 			case "moveFile": $this->actionMoveFile(); break; //change a file (also rename)
+			case "copyFile": $this->actionCopyFile(); break; //make a copy of a file
 			case "updateFile": $this->actionUpdateFile(); break; //replace a file content
 			case "updateFilePart": $this->actionUpdateFilePart(); break; //replace a file content
 			case "updateFilePreview": $this->actionUpdateFilePreview(); break; //update file preview image
@@ -1533,16 +1534,6 @@ class FilesModule
 			return;
 		}
 
-		//check privileges in origin file
-		$unit = $this->getUnit( $file->unit_id, $user->id );
-		if(!$unit || $unit->mode == "READ")
-		{
-			$this->result["status"] = -1;
-			debug("actionMoveFile check unit mode");
-			$this->result["msg"] = 'unit not found or not allowed';
-			return;
-		}
-
 		//check privileges in destination unit
 		$targetfile_info = $this->parsePath( $_REQUEST["target_fullpath"] );
 		if(!$targetfile_info)
@@ -1556,20 +1547,22 @@ class FilesModule
 		if(!$target_unit || $target_unit->mode == "READ")
 		{
 			$this->result["status"] = -1;
-			debug("actionMoveFile check unit mode");
+			debug("actionCopyFile check unit mode");
 			$this->result["msg"] = 'unit not found or not allowed';
 			return;
 		}
 		$target_fullpath = $target_unit->name . "/" . $targetfile_info->folder . "/" . $targetfile_info->filename;
+		debug("Target path will be : " . $target_fullpath );
 
-		//move file (from DB and HD)
+		//copy file (from DB and HD)
 		$origin_filesize = $this->getFileSize( $fullpath );
 		$target_filesize = $this->getFileSize( $target_fullpath );
 		if(!$target_filesize)
 			$target_filesize = 0;
 		$diff_size = $origin_filesize - $target_filesize;
+		debug("Diff size: " . $diff_size );
 
-		if( !$this->copyFileById( $file->id, $target_unit->id, $targetfile_info->folder, $targetfile_info->filename ) )
+		if( !$this->copyFileById( $file->id, $target_unit->id, $targetfile_info->folder, $targetfile_info->filename, $user->id ) )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = $this->last_error;
@@ -1595,7 +1588,7 @@ class FilesModule
 		$this->copyPreview( $fullpath, $target_fullpath );
 
 		$this->result["status"] = 1;
-		$this->result["msg"] = "file moved";
+		$this->result["msg"] = "file copied";
 		$this->result["unit"] = $unit;
 		$this->result["target_unit"] = $target_unit;
 		$this->result["last_error"] = $this->last_error;
@@ -3051,7 +3044,7 @@ class FilesModule
 		$database = getSQLDB();
 
 		$file_id = intval($file_id);
-		$new_unit = intval($new_unit);
+		$new_unit_id = intval($new_unit_id);
 		$new_folder = $this->clearPathName( $new_folder );
 
 		//SAFETY FIRST
@@ -3120,7 +3113,86 @@ class FilesModule
 		return true;
 	}
 
+	public function copyFileById( $file_id, $new_unit_id, $new_folder, $new_filename, $user_id = -1 )
+	{
+		$database = getSQLDB();
 
+		$file_id = intval($file_id);
+		$new_unit_id = intval($new_unit_id);
+		$new_folder = $this->clearPathName( $new_folder );
+
+		//debug("Folder: " . $new_folder );
+		//debug("Filename: " . $new_filename );
+
+		//SAFETY FIRST
+		if( !$this->validateFilename( $new_filename) )
+		{
+			debug("Filename contains invalid characters");
+			$this->last_error = "INVALID FILENAME";
+			return null;
+		}
+
+		if( strpos($new_folder,"..") != FALSE )
+		{
+			debug("Folder contains invalid characters");
+			$this->last_error = "INVALID FILENAME";
+			return null;
+		}
+
+		//CHECK EXTENSION
+		if( !$this->validateExtension( $new_filename ) )
+		{
+			debug("Extension is invalid");
+			$this->last_error = "INVALID FILENAME: " . $new_filename;
+			return null;
+		}
+
+
+		$file = $this->getFileInfoById($file_id);
+		if($file == null)
+		{
+			debug("WRONG FILE ID");
+			$this->last_error = "WRONG FILE ID";
+			return false;
+		}
+
+		if($user_id == -1)
+			$user_id = $file->author_id;
+
+		$target_unit = $this->getUnit( $new_unit_id );
+		if(!$target_unit)
+		{
+			debug("WRONG TARGET UNIT: " . $new_unit_id);
+			$this->last_error = "WRONG TARGET UNIT";
+			return false;
+		}
+
+		$database = getSQLDB();
+
+		$query = "INSERT INTO `".DB_PREFIX."files` (`id` , `filename` , `category` , `unit_id`, `folder` , `metadata` , `author_id` , `size`) VALUES ( NULL ,'".$new_filename ."','".$file->category."',".$new_unit_id.",'" . $new_folder. "', '".$file->metadata."', ".$user_id ." , ".$file->size." )";
+		
+		$result = $database->query( $query );
+		if($database->affected_rows == 0)
+		{
+			$this->last_error = "NOTHING DONE";
+			return false;
+		}
+
+		if(!self::folderExist( $target_unit->name . "/" . $new_folder) )
+			self::createFolder( $target_unit->name . "/" . $new_folder );
+
+		$oldfilepath = $file->unit_name . "/" . $file->folder . "/" . $file->filename;
+		$newfilepath = $target_unit->name . "/" .  $new_folder . "/" . $new_filename;
+
+		if( !self::copyFile( $oldfilepath, $newfilepath ) )	
+		{
+			debug("Error Copying HD from " . $oldfilepath . "   to   " . $newfilepath );
+			$this->last_error = "Problem copying file";
+			return false;
+		}
+
+		return true;
+	}
 	/*
 
 	private function getUserFilesInFolder($user_id, $folder = "")
@@ -3455,7 +3527,7 @@ class FilesModule
 
 		$result = copy( self::getFilesFolderName() . "/" .  $old, self::getFilesFolderName() . "/" . $new );
 		if(!$result)
-			debug("File cannot be copyed to : " . self::getFilesFolderName() . "/" . $new );
+			debug("Error in copyFile, copy not performed to: " . self::getFilesFolderName() . "/" . $new );
 		return $result;
 	}
 

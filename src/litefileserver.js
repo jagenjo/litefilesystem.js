@@ -42,14 +42,13 @@ var LiteFileServer = {
 			console.log(resp);
 			session.last_resp = resp;
 			session.user = resp.user;
-			session.status = resp.status == 1 ? LiteFileServer.LOGGED : LiteFileServer.NOT_LOGGED;
+			session.status = resp.status > 0 ? LiteFileServer.LOGGED : LiteFileServer.NOT_LOGGED;
 			if(resp.session_token)
 				session.setToken(resp.session_token);
+			if(session && session.status > 0 && LFS.onNewSession)
+				LFS.onNewSession(session);
 			if(on_complete)
 				on_complete(session, resp);
-
-			if(session && session.status == 1 && LFS.onNewSession)
-				LFS.onNewSession(session);
 		});
 	},
 
@@ -811,7 +810,7 @@ Session.prototype.uploadFile = function( fullpath, data, extra, on_complete, on_
 	{
 		if(on_error)
 			on_error("Filename has invalid characters");
-		console.error("Filename has invalid characters");
+		console.error("Filename has invalid characters: " + fullpath );
 		return;
 	}
 
@@ -1069,7 +1068,7 @@ Session.prototype.updateFileContent = function( fullpath, data, on_complete, on_
 	{
 		if(on_error)
 			on_error("Filename has invalid characters");
-		console.error("Filename has invalid characters");
+		console.error("Filename has invalid characters: " + fullpath);
 		return;
 	}
 
@@ -1131,7 +1130,7 @@ Session.prototype.copyFile = function( fullpath, target_fullpath, on_complete, o
 	{
 		if(on_error)
 			on_error("Filename has invalid characters");
-		console.error("Filename has invalid characters");
+		console.error("Filename has invalid characters: " + fullpath );
 		return;
 	}
 
@@ -1154,12 +1153,12 @@ Session.prototype.moveFile = function( fullpath, target_fullpath, on_complete, o
 	if(fullpath.substr(0,5) == "http://")
 		throw("LFS does not support full URLs as fullpath");
 
-	var info = LFS.parsePath( fullpath );
+	var info = LFS.parsePath( target_fullpath );
 	if( !info )
 	{
 		if(on_error)
 			on_error("Filename has invalid characters");
-		console.error("Filename has invalid characters");
+		console.error("Filename has invalid characters: " + target_fullpath);
 		return;
 	}
 
