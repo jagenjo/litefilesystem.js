@@ -12,6 +12,11 @@ To install LFS in your server you need to be sure to fulfill the next requiremen
 
 Now you must copy the ```src/``` folder from the repository to your machine.
 
+Be sure that the folder and the files are in the same group as your HTTP server (usually www-data). To ensure that you can run this command:
+```bash
+chown -R :www-data litefileserver_folder
+```
+
 ## Edit the config file
 
 The ```include/config.php``` must contain the database name, password and some configuration options, but it is not supplied. 
