@@ -1,4 +1,4 @@
-# Installing LieFileServer
+# Installing LiteFileServer
 
 ## Requirements
 
@@ -61,7 +61,7 @@ In the root folder of the installation:
 php install.php
 ```
 
-### browser
+### From the browser
 
 Open the install.php url
 
