@@ -6,7 +6,7 @@ To install LFS in your server you need to be sure to fulfill the next requiremen
 
 - any HTTP server (apache, nginx, ...)
 - php5 or higher
-- mySQL 4.0
+- mySQL 4.0 or higher
 
 ## Copy files
 
