@@ -61,7 +61,7 @@ php install.php
 Open the install.php url
 
 
-## Reinstalling
+### Reinstalling
 
 If you to reinstall it you can call the script again **but all the files inside the LFS will be lost**.
 
@@ -69,4 +69,6 @@ If you to reinstall it you can call the script again **but all the files inside 
 php install.php force
 ```
 
-Your version should be ready to be used
+## Ready
+
+Your version should be ready to be used, check the website and login with the admin user/pass.
