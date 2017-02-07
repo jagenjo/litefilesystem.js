@@ -27,6 +27,8 @@ class SystemModule
 			$this->actionRestoreBackup();
 		else if ($action == "deleteBackup")
 			$this->actionDeleteBackup();
+		//else if ($action == "upgrade") //done from install.php
+		//	$this->upgradeSystem();
 		else
 		{
 			//nothing

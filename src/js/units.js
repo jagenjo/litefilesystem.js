@@ -15,6 +15,7 @@ $(".create-unit-button").click(function(e){
 	}});
 
 });
+
 $("#new-unit-dialog .create-button").click(function(e){
 	var name = $("#new-unit-dialog .inputName").val();
 	if(!name)
@@ -33,6 +34,22 @@ $("#new-unit-dialog .create-button").click(function(e){
 	});
 });
 
+
+$("#new-unit-dialog .invitation-button").click(function(e){
+	var token = $("#new-unit-dialog .inputInvitationToken").val();
+	if(!token)
+		return;
+	$("#new-unit-dialog").modal('hide');
+	session.joinUnit( token, function(unit, resp){
+		if(!unit)
+			bootbox.alert(resp.msg);
+		if(resp.user)
+			refreshUserInfo( resp.user );
+		refreshUnits();
+	}, function(err){
+		bootbox.alert(err || "Cannot join unit");
+	});
+});
 
 $(".refresh-units-button").click(function(e){
 	refreshUnits();
@@ -111,6 +128,7 @@ function refreshUnitSetup( unit_name )
 {
 	var unit = units[ unit_name ];
 	$("#setup-unit-dialog .inputName").val( unit.metadata.name );
+	$("#setup-unit-dialog .inputInviteToken").val( unit.invite_token );
 	var root = $("#setup-unit-dialog .users");
 
 	var template = $("#setup-unit-dialog .unit-user-item.template");
@@ -124,29 +142,50 @@ function refreshUnitSetup( unit_name )
 		root.empty();
 
 		if(unit.users)
-		for(var i in unit.users)
 		{
-			var user = unit.users[i];
-
-			var row = template.clone();
-			row.removeClass("template");
-			row.find(".username").html( user.username );
-			row.find(".role").html( user.mode == "ADMIN" ? "Administrator" : user.mode );
-			row[0].dataset["username"] = user.username;
-			row[0].dataset["unit"] = unit_name;
-
-			if( user.username == session.user.username)
-				row.find(".dropdown").remove();
-
-			if(user.mode == "ADMIN")
+			$("#setup-unit-dialog .users-list").show();
+			for(var i in unit.users)
 			{
-				row.addClass("admin-role");
-				root.prepend(row);
+				var user = unit.users[i];
+
+				var row = template.clone();
+				row.removeClass("template");
+				row.find(".username").html( user.username );
+				row.find(".role").html( user.mode == "ADMIN" ? "Administrator" : user.mode );
+				row[0].dataset["username"] = user.username;
+				row[0].dataset["unit"] = unit_name;
+
+				if( user.username == session.user.username)
+					row.find(".dropdown").remove();
+
+				if(user.mode == "ADMIN")
+				{
+					row.addClass("admin-role");
+					root.prepend(row);
+				}
+				else
+					root.append(row);
 			}
-			else
-				root.append(row);
+		}
+		else
+		{
+			$("#setup-unit-dialog .users-list").hide();
 		}
 
+		if( unit.author_id == session.user.id )
+		{
+			$("#setup-unit-dialog .only-author").show();
+			$("#setup-unit-dialog .slider").show();
+			$("#setup-unit-dialog .leave-unit-button").hide();
+		}
+		else
+		{
+			$("#setup-unit-dialog .only-author").hide();
+			$("#setup-unit-dialog .slider").hide();
+			$("#setup-unit-dialog .leave-unit-button").show();
+		}
+
+		//bind user button to remove from unit
 		$(".remove-user-unit-button").click(function(){
 			var username = this.parentNode.parentNode.parentNode.parentNode.dataset["username"];
 			bootbox.confirm("Are you sure?", function(v){
@@ -160,6 +199,7 @@ function refreshUnitSetup( unit_name )
 				});
 			});
 		});
+
 	});
 }
 
@@ -209,4 +249,26 @@ $("#setup-unit-dialog .delete-unit-button").click(function(e){
 		});
 	});
 });
+
+$("#setup-unit-dialog .leave-unit-button").click(function(e){
+	e.preventDefault();
+	e.stopPropagation();
+
+	bootbox.confirm("Are you sure? you wont have access to this unit", function(r){
+		if(!r)
+			return;
+
+		session.leaveUnit( current_unit, function(status,resp){
+				if(status)
+				{
+					refreshUnits();
+					refreshUserInfo( resp.user );
+					$("#setup-unit-dialog").modal("hide");
+				}
+				else
+					bootbox.alert( resp.msg );
+		});
+	});
+});
+
 

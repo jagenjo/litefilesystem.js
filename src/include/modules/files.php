@@ -5,7 +5,7 @@ class FilesModule
 	// List of internal configurable variables
 	//********************************************
 	private static $MAX_UNITS_PER_USER = 5; 
-	private static $MAX_USERS_PER_UNIT = 10;
+	private static $MAX_USERS_PER_UNIT = 1000;
 	private static $DEFAULT_UNIT_SIZE = 5000000;
 	private static $UNIT_MIN_SIZE = 1048576; //in bytes
 	private static $UNIT_MAX_SIZE = 209715200; //in bytes
@@ -40,6 +40,8 @@ class FilesModule
 			case "getUnits": $this->actionGetUnits(); break; //get files inside one folder
 			case "inviteUserToUnit": $this->actionInviteUserToUnit(); break; //create a new unit
 			case "removeUserFromUnit": $this->actionRemoveUserFromUnit(); break; //create a new unit
+			case "joinUnit": $this->actionJoinUnit(); break; //join an existing unit
+			case "leaveUnit": $this->actionLeaveUnit(); break; //leave an existing unit
 			case "getUnitInfo": $this->actionGetUnitInfo(); break; //get info about all the users in a unit
 			case "setUnitInfo": $this->actionSetUnitInfo(); break; //get info about all the users in a unit
 			case "deleteUnit": $this->actionDeleteUnit(); break; //create a new unit
@@ -345,6 +347,154 @@ class FilesModule
 		return true;
 	}
 
+	public function actionJoinUnit()
+	{
+		$user = $this->getUserByToken();
+		if(!$user) //result already filled in getTokenUser
+			return;
+
+		$mode = "READ";
+		$max_units = self::$MAX_UNITS_PER_USER;
+
+		if(!isset($_REQUEST["invite_token"]) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$invite_token = $_REQUEST["invite_token"];
+		if($invite_token == "")
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'wrong invite token';
+			return;
+		}
+
+		//get unit only if user has rights
+		$unit = $this->getUnitByToken( $invite_token );
+		if(!$unit)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'unit not found';
+			return;
+		}
+
+		//check how many users does this unit have
+		$users = $this->getUnitUsers( $unit->id );
+		if( count($users) >= self::$MAX_USERS_PER_UNIT && !$user->roles["admin"])
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'too many users in this unit';
+			return;
+		}
+
+		//check how many units does he have
+		$units = $this->getUserUnits($user->id);
+		if($max_units > 0 && count($units) >= $max_units && !$user->roles["admin"])
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'too many units';
+			return;
+		}
+
+		//is already in unit
+		foreach($units as $i => $u)
+		{
+			if($u->invite_token == $invite_token)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'user already in unit';
+				return;
+			}
+		}
+
+		//add privileges
+		if( !$this->setPrivileges($unit->id, $user->id, $mode ) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'problem giving rights to unit';
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["user"] = $user;
+		$this->result["msg"] = 'user joined the unit';
+		return true;
+	}
+
+
+	public function actionLeaveUnit()
+	{
+		$user = $this->getUserByToken();
+		if(!$user) //result already filled in getTokenUser
+			return;
+
+		if(!isset($_REQUEST["unit_name"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$unit_name = $_REQUEST["unit_name"];
+		if($unit_name == "")
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'wrong unit name';
+			return;
+		}
+
+		//get unit only if user has rights
+		$unit = $this->getUnitByName( $unit_name, $user->id );
+		if(!$unit)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+
+		if($unit->author_id == $user->id)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'you cannot leave a unit that belongs to you';
+			return;
+		}
+
+		//is already in unit
+		$units = $this->getUserUnits($user->id);
+		$found = false;
+		foreach($units as $i => $u)
+		{
+			if($u->name == $unit_name)
+			{
+				$found = true;
+				break;
+			}
+		}
+
+		if(!$found)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'user is not in that unit';
+			return;
+		}
+
+		//remove privileges
+		if( !$this->setPrivileges( $unit->id, $user->id, null ) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'problem removing rights from unit';
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["user"] = $user;
+		$this->result["msg"] = 'user leave unit';
+		return true;
+	}
+
 	public function actionDeleteUnit()
 	{
 		$user = $this->getUserByToken();
@@ -437,13 +587,16 @@ class FilesModule
 		}
 
 		//get users
-		$users = $this->getUnitUsers( $unit->id );
-		$unit->users = $users;
+		if($user->id == $unit->author_id)
+		{
+			$users = $this->getUnitUsers( $unit->id );
+			$this->result["users"] = $users;
+			$unit->users = $users;
+		}
 
 		$this->result["status"] = 1;
 		$this->result["msg"] = 'unit info';
 		$this->result["unit"] = $unit;
-		$this->result["users"] = $users;
 	}
 
 	public function actionSetUnitInfo()
@@ -2164,15 +2317,16 @@ class FilesModule
 			return false;
 		}
 
+		if( defined("UNITNAME_SALT") )
+			$salt = UNITNAME_SALT;
+		else
+			$salt = "silly salt"; //for legacy installations
+
 		//generate random unit name
 		if(!$unit_name)
-		{
-			if( defined("UNITNAME_SALT") )
-				$salt = UNITNAME_SALT;
-			else
-				$salt = "silly salt"; //for legacy installations
-			$unit_name = md5( $salt . $user_id . time() . rand() );
-		}
+			$unit_name = md5( $salt . $user_id . time() . rand() ); //has to be different from invite to avoid people autoinviting
+
+		$invite_token = md5( "invite" . $salt . $user_id . time() . rand() );
 
 		//check if there is already a unit with that name
 		$query = "SELECT * FROM `".DB_PREFIX."units` WHERE `name` = '" . addslashes($unit_name) . "'";
@@ -2192,7 +2346,7 @@ class FilesModule
 		$metadata = "{\"name\":\"".addslashes($desc_name)."\"}";
 
 		//insert DB entry
-		$query = "INSERT INTO `".DB_PREFIX."units` (`id` , `name` , `author_id` , `metadata` , `used_size`, `total_size` ) VALUES ( NULL ,'".$unit_name ."',".intval($user_id).",'".$metadata."',0,".intval($size).")";
+		$query = "INSERT INTO `".DB_PREFIX."units` (`id` , `name` , `invite_token` , `author_id` , `metadata` , `used_size`, `total_size` ) VALUES ( NULL ,'".$unit_name ."','".$invite_token."',".intval($user_id).",'".$metadata."',0,".intval($size).")";
 
 		$database = getSQLDB();
 		$result = $database->query( $query );
@@ -2470,6 +2624,30 @@ class FilesModule
 		$unit = $this->processUnit( $result->fetch_object() );
 		return $unit;
 	}
+
+	public function getUnitByToken( $token, $user_id = -1 )
+	{
+		$database = getSQLDB();
+		$user_id = intval($user_id);
+		$token = addslashes($token);
+
+		//check privileges
+		if($user_id != -1)
+		{
+			$query = "SELECT units.*, privileges.mode, users.username AS author FROM `".DB_PREFIX."units` AS units, `".DB_PREFIX."users` AS users, `".DB_PREFIX."privileges` as privileges WHERE units.invite_token = '" . $token . "' AND units.id = privileges.unit_id AND privileges.user_id = " . $user_id . " AND units.author_id = users.id";
+		}
+		else
+			$query = "SELECT units.*, users.username AS author FROM `".DB_PREFIX."units` AS units, `".DB_PREFIX."users` AS users WHERE `invite_token` = '" . $token . "' AND units.author_id = users.id";
+
+		$result = $database->query( $query );
+		if(!$result)
+			return null;
+
+		$unit = $this->processUnit( $result->fetch_object() );
+		return $unit;
+	}
+
+
 
 	public function getUnitUsers( $unit_id )
 	{
@@ -3378,6 +3556,7 @@ class FilesModule
 		$query = "CREATE TABLE IF NOT EXISTS ".DB_PREFIX."units (
 			`id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
 			`name` VARCHAR(256) NOT NULL,
+			`invite_token` VARCHAR(256),
 			`author_id` INT NOT NULL,
 			`metadata` TEXT NOT NULL,
 			`used_size` INT NOT NULL,
@@ -3467,9 +3646,47 @@ class FilesModule
 	public function upgrade()
 	{
 		debug("Upgrading files tables");
+
 		if(!$this->createTables())
 			return false;
+
+		$database = getSQLDB();
+
+		//EXAMPLE to upgrade when something is missing
+		if( !self::checkTableHasColumn( DB_PREFIX."units","invite_token") )
+		{
+			$query = "ALTER TABLE `".DB_PREFIX."units` ADD `invite_token` VARCHAR(256) NOT NULL AFTER `name`;";
+			$result = $database->query( $query );
+			debug("column added to units table: invite_token");
+
+			if( defined("UNITNAME_SALT") )
+				$salt = UNITNAME_SALT;
+			else
+				$salt = "silly salt"; //for legacy installations
+
+			//add a default invite token to every existing unit
+			$query = "SELECT * FROM `".DB_PREFIX."units`;";
+			$result = $database->query( $query );
+			while($unit = $result->fetch_object())
+			{
+				$invite_token = md5( "invite" . $salt . $unit->author_id . time() . rand() );
+				$query = "UPDATE `".DB_PREFIX."units` SET `invite_token` = '".$invite_token."' WHERE `id` = ".$unit->id;
+				$result2 = $database->query( $query );
+				if (!$result2)
+					debug("error updating invite token");
+			}
+			debug("invite tokens generated");
+		}
+
 		return true;
+	}
+
+	public static function checkTableHasColumn( $table, $column )
+	{
+		$database = getSQLDB();
+		$query = "SELECT * FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '".DB_NAME."' AND TABLE_NAME = '".$table."' AND COLUMN_NAME = '".$column."'";
+		$result = $database->query( $query );	
+		return $result->num_rows > 0 ? TRUE : FALSE;
 	}
 
 	// SANDBOXED FILE ACTIONS ***********************************************************
@@ -3554,7 +3771,7 @@ class FilesModule
 
 		$current = "/";
 
-		for( $i = 0; i < $num; $i++)
+		for( $i = 0; $i < $num; $i++)
 		{
 			$subdir = $subfolders[ $i ];
 

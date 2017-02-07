@@ -225,13 +225,18 @@
         <label>Name <span class='unitname'></span></label>
 		<input type="text" class="inputName form-control" placeholder="Unit name">
 
+        <label>Invite token</label>
+		<input type="text" class="inputInviteToken form-control" placeholder="Invite token">
+
         <label>Size <span class='size-info'></span></label>
 		<div>
-			<input name="size" type="text" class="inputSize form-control" placeholder="2" value="" required autofocus />
+			<input name="size" type="text" class="inputSize only-author form-control" placeholder="2" value="" required autofocus />
 		</div>
 
-		<h3>Users with access</h3>
-		<div class="users">
+		<div class="users-list">
+			<h3>Users with access</h3>
+			<div class="users">
+			</div>
 		</div>
 		<div class="unit-user-item template">
 			<span class='glyphicon glyphicon-user' aria-hidden='true'></span> <span class='username'></span> as <span class="role"></span>
@@ -248,9 +253,10 @@
 		</div>
       </div>
       <div class="modal-footer">
-		<button title="Invite user" class="invite-user-button btn ladda-button"><span class="glyphicon glyphicon-user" aria-hidden="true"></span> <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>Invite</button>
-        <button class="delete-unit-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete</span></button>
-        <button class="save-unit-setup-button btn btn-lg btn-primary ladda-button" data-style="slide-up" data-color="green"><span class="ladda-label">Save</span></button>
+		<button title="Invite user" class="invite-user-button only-author btn ladda-button"><span class="glyphicon glyphicon-user" aria-hidden="true"></span> <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>Invite</button>
+        <button class="delete-unit-button only-author btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete</span></button>
+        <button class="save-unit-setup-button only-author btn btn-lg btn-primary ladda-button" data-style="slide-up" data-color="green"><span class="ladda-label">Save</span></button>
+        <button class="leave-unit-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Leave</span></button>
       </div>
       </form>
     </div><!-- /.modal-content -->
@@ -307,10 +313,27 @@
 			<input name="size" type="text" class="inputSize form-control" placeholder="2" value="" required autofocus />
 		</div>
       </div>
+
       <div class="modal-footer">
         <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
         <button type="button" class="create-button btn btn-primary">Create</button>
       </div>
+
+      <div class="modal-header">
+        <h4 class="modal-title">Join existing unit</h4>
+      </div>
+      <div class="modal-body">
+		<div class="input-group">
+        <label>Join from Invitation token</label>
+        <input name="invitation_token" type="text" class="inputInvitationToken form-control" placeholder="invitation token" value="" />
+		</div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="button" class="invitation-button btn btn-primary">Join Unit</button>
+      </div>
+
     </div><!-- /.modal-content -->
   </div><!-- /.modal-dialog -->
 </div><!-- /.modal -->
