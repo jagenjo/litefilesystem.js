@@ -108,7 +108,6 @@ if(!$console)
 <?php
 }//cli
 
-
 	if (!file_exists(__DIR__ . "/include/config.php"))
 	{
 		showMessage("Cannot find <strong>include/config.php</strong> file, please remember to create a copy of  <strong>config.sample.php</strong> as  <strong>config.php </strong> and edit it with your DB values.");

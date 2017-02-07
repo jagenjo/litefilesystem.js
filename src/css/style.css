@@ -8,6 +8,19 @@ html,body {
     background-color: #22222A;
 }
 
+::-webkit-scrollbar {
+    height: 12px;
+	width: 12px;
+	background: #222;
+}
+::-webkit-scrollbar-thumb {
+    background: #aaa;
+}
+::-webkit-scrollbar-corner {
+    background: #666;
+}
+
+
 .form-control {
 	background-color: #4D4D4D;
 	border: 1px solid #4C4C4C;
@@ -368,6 +381,7 @@ textarea {
 	border-radius: 2px;
 	margin: 10px 0;
 	padding: 0px;
+	padding-left: 8px;
 	white-space: nowrap;
 }
 

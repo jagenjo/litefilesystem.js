@@ -599,7 +599,7 @@ function refreshFolders( unit_name, on_complete )
 		{
 			var elem = document.createElement("div");
 			elem.dataset["folder"] = name;
-			elem.dataset["path"] =  LFS.clearPath( unit_name + "/" + path );
+			elem.dataset["path"] =  LFS.cleanPath( unit_name + "/" + path );
 			elem.style.paddingLeft = (20 * level).toFixed() + "px";
 			elem.className = "folder-item folder-item-" + elem.dataset["path"].replace(/\//g,"__");
 
@@ -675,7 +675,7 @@ function refreshFiles( fullpath, on_complete )
 	var info = LFS.parsePath(fullpath,true);
 
 	//change current folder
-	current_folder = LFS.clearPath( info.folder );
+	current_folder = LFS.cleanPath( info.folder );
 
 	if(current_unit != info.unit)
 	{
@@ -687,7 +687,7 @@ function refreshFiles( fullpath, on_complete )
 	$(".folder-item .glyphicon").removeClass("glyphicon-folder-open").addClass("glyphicon-folder-close");
 
 	//select folder
-	var folder_class = LFS.clearPath( current_unit + "/" + current_folder).replace(/\//g,"__"); 
+	var folder_class = LFS.cleanPath( current_unit + "/" + current_folder).replace(/\//g,"__"); 
 	$(".folder-item-" + folder_class ).addClass("selected");
 	$(".folder-item-" + folder_class + " .glyphicon").addClass("glyphicon-folder-open").removeClass("glyphicon-folder-close");
 

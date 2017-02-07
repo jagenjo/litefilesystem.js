@@ -10,7 +10,10 @@ require_once 'include/core.php';
 
 //check for actions
 if( !isset($_REQUEST["action"]) )
+{
+	loadModules("*");
 	die('{"msg":"no action"}');
+}
 
 //retrieve module name and action
 $action = $_REQUEST["action"];

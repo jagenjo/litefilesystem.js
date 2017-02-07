@@ -43,6 +43,30 @@ $(".delete-folder-button").click(function(e){
 	});
 });
 
+$(".download-folder-button").click(function(e){
+	bootbox.confirm("Are you sure you want to download the folder '"+current_folder+"'? It may take a while", function(data){
+		if(!data)
+			return;
+
+		var unit = current_unit;
+		var fullpath = unit + "/" + current_folder;
+
+		var dialog = bootbox.dialog({ message: "Generating compressed file... please wait", backdrop: false, closeButton: false });
+
+
+		session.downloadFolder( fullpath, function(v, resp){
+			dialog.remove();
+			if(resp.data)
+				window.open( resp.data, "_blank" );
+			refreshFolders( unit, function(){
+				refreshFiles( unit + "/" );
+			});
+		}, function(err){
+			bootbox.alert(err);			
+		});
+	});
+});
+
 
 //CREATE FILE
 $("#newfile-dialog .submit-button").click(function(e){

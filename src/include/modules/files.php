@@ -45,6 +45,7 @@ class FilesModule
 			case "deleteUnit": $this->actionDeleteUnit(); break; //create a new unit
 			case "getFolders":	$this->actionGetFolders(); break; //get folders tree
 			case "createFolder": $this->actionCreateFolder(); break; //create a folder
+			case "downloadFolder": $this->actionDownloadFolder(); break; //download a folder content in a zip
 			case "deleteFolder": $this->actionDeleteFolder(); break; //create a new unit
 			case "moveFolder": $this->actionMoveFolder(); break; //move folder
 			case "getFilesInFolder": $this->actionGetFilesInFolder(); break; //get files inside one folder
@@ -674,6 +675,71 @@ class FilesModule
 		self::createFolder( $fullpath );
 		$this->result["msg"] = "folder created";
 		$this->result["data"] = $fullpath;
+		$this->result["status"] = 1;
+	}
+
+	public function actionDownloadFolder()
+	{
+		$user = $this->getUserByToken();
+		if(!$user) //result already filled in getTokenUser
+			return;
+
+		$unit = null;
+		$folder = null;
+
+		if(isset($_REQUEST["fullpath"]))
+		{
+			$path_info = $this->parsePath( $_REQUEST["fullpath"], true );
+			if(!$path_info)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'fullpath contains invalid characters';
+				return;			
+			}
+			
+			$unit_name = $path_info->unit;
+			$folder = $path_info->folder;
+		}
+		else if(isset($_REQUEST["folder"]) && isset($_REQUEST["unit"]))
+		{
+			$unit_name = $_REQUEST["unit"];
+			$folder = $_REQUEST["folder"];
+		}
+		else
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$unit = $this->getUnitByName( $unit_name, $user->id );
+		if(!$unit)
+		{
+			$this->result["status"] = -1;
+			debug("actionDeleteFolder getUnitByName: " . $unit_name);
+			$this->result["msg"] = 'unit not found or not allowed';
+			return;
+		}
+
+		if(!$unit->mode || $unit->mode == "READ")
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'cannot download with only read privileges';
+			return;
+		}
+
+		//DELETE
+		$dataurl = $this->downloadFolder( $unit, $folder );
+		if( !$dataurl )
+		{
+			$this->result["msg"] = "folder cannot be downloaded";
+			$this->result["status"] = -1;
+			return;
+		}
+
+		$this->result["msg"] = "folder ready to download";
+		$this->result["unit"] = $this->getUnit( $unit->id );
+		$this->result["data"] = $dataurl;
 		$this->result["status"] = 1;
 	}
 
@@ -2641,6 +2707,43 @@ class FilesModule
 		return true;
 	}
 
+
+	public function downloadFolder( $unit, $folder )
+	{
+		if( strpos($folder, "..") != FALSE )
+			return null;
+
+		$temp_folder = __DIR__ . "/../../tmp";
+
+		if(!is_dir( $temp_folder ))
+		{
+			mkdir( $temp_folder );  
+			chmod( $temp_folder, 0775);
+		}
+
+		$fullpath = $unit->name . "/" . $folder;
+
+		$output = array();
+
+		//purge old files (DANGEROUS)
+		debug("Purguing old files...");
+		$cmd = "find ". $temp_folder ." -mtime +1 -exec rm {} \;";
+		exec( $cmd, $output );
+		debug( $output );
+
+		//creating temporary tar.gz file with the folder content
+		$tmp_filename = $temp_folder . "/folder_download_" . ((string)time()) . "_" . ((string)rand()) . ".tar.gz";
+		debug("Compressing FILES (this could take some time)...");
+		$cmd = "tar -cvzf ".$tmp_filename." ". FILES_PATH . $fullpath . "/ 2>&1";
+		debug( $cmd );
+		exec( $cmd, $output );
+		debug( $output );
+
+		$url = "tmp/" . basename( $tmp_filename );
+		debug("File at: ".$tmp_filename);
+		return $url;
+	}
+
 	public function deleteFolder( $unit, $folder )
 	{
 		if( strpos($folder, "..") != FALSE )
@@ -3039,7 +3142,7 @@ class FilesModule
 		return true;
 	}
 
-	public function moveFileById($file_id, $new_unit_id, $new_folder, $new_filename)
+	public function moveFileById( $file_id, $new_unit_id, $new_folder, $new_filename )
 	{
 		$database = getSQLDB();
 
@@ -3107,6 +3210,14 @@ class FilesModule
 		{
 			debug("Error Moving HD from " . $oldfilepath . "   to   " . $newfilepath );
 			$this->last_error = "Problem moving file";
+
+			//undo DB changes
+			$query = "UPDATE `".DB_PREFIX."files` SET `unit_id` = ".$file->unit_id.", `folder` = '".$file->folder."' , `filename` = '".$file->filename."' WHERE `id` = ".$file->id;
+			$result = $database->query( $query );
+			if($database->affected_rows == 0)
+				debug("Error undoing changes in DB" );
+			else
+				debug("Changes in DB undone" );
 			return false;
 		}
 
@@ -3436,17 +3547,37 @@ class FilesModule
 		return rmdir($path . $dir);
 	} 
 
-	private static function createFolder($dirname, $force = false)
+	private static function createFolder( $dirname, $force = false)
 	{
-		if( is_dir(self::getFilesFolderName() . "/" . $dirname) )
+		$subfolders = explode("/",$dirname);
+		$num = count($subfolders);
+
+		$current = "/";
+
+		for( $i = 0; i < $num; $i++)
 		{
-			if($force)
-				self::delTree($dirname);
-			else
-				return;
+			$subdir = $subfolders[ $i ];
+
+			//already exist
+			if( is_dir(self::getFilesFolderName() . $current . $subdir) )
+			{
+				//last subfolder
+				if( $i == ($num - 1) )
+				{
+					if($force)
+						self::delTree($subdir);
+					else
+						return;
+				}
+			}
+			else //do not exist? create
+			{
+				mkdir( self::getFilesFolderName() . $current . $subdir );  
+				chmod( self::getFilesFolderName() . $current . $subdir, 0775);
+			}
+
+			$current .= $subdir . "/";
 		}
-		mkdir( self::getFilesFolderName() . "/" . $dirname );  
-		chmod( self::getFilesFolderName() . "/" . $dirname, 0775);
 	}
 
 	private static function writeFile($fullpath, $data)
