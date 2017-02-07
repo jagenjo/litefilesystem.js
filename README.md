@@ -16,12 +16,7 @@ The server side is coded in PHP and comes with useful scripts for administration
 Installing
 ----------
 
-Create a copy of config.sample.php from include/ and name it config.php, edit the file with the info for your database and folders.
-
-Be sure that the folder is in the same group as your HTTP server (usually www-data). To ensure that you can run this command:
-```su chown -R :www-data litefileserver_folder```
-
-Run the install.php script (can be run from the browser or the CLI)
+Check the [install guide](INSTALL.md) to see a step by step process of how to install it in your server.
 
 Feedback
 --------
