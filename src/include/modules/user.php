@@ -57,6 +57,10 @@ class UsersModule
 			$this->actionAddRole();
 		else if ($action == "getInfo")
 			$this->actionGetUserInfo();
+		else if ($action == "getUserData")
+			$this->actionGetUserData();
+		else if ($action == "setUserData")
+			$this->actionSetUserData();
 		else if ($action == "exist")
 			$this->actionIsUser();
 		else if ($action == "setSpace")
@@ -498,6 +502,37 @@ class UsersModule
 		$this->result["msg"] = 'user found';
 	}
 
+	public function actionGetUserData()
+	{
+		$user = $this->actionValidateToken(true);
+		if(!$user)
+			return;
+
+		$this->result["status"] = 1;
+		$this->result["userdata"] = $user->data;
+		$this->result["msg"] = 'getting user data';
+	}
+
+	public function actionSetUserData()
+	{
+		$user = $this->actionValidateToken(true);
+		if(!$user)
+			return;
+
+		if(!isset($_REQUEST["userdata"]) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$this->setUserData( $user->id, $_REQUEST["userdata"] );
+
+		$this->result["status"] = 1;
+		$this->result["userdata"] = $_REQUEST["userdata"];
+		$this->result["msg"] = 'user data modified';
+	}
+
 	public function actionSetUserSpace()
 	{
 		$user = $this->actionValidateToken(true);
@@ -848,6 +883,21 @@ class UsersModule
 			return false;
 		return true;
 	}
+
+	public function setUserData( $user_id, $userdata )
+	{
+		$userdata = addslashes($userdata);
+
+		$database = getSQLDB();
+		$query = "UPDATE `".DB_PREFIX."users` SET `data` = '" . $userdata. "' WHERE `id` = " . intval($user_id) . " LIMIT 1";
+		$result = $database->query( $query );
+		if(!$result)
+			return false;
+		if($database->affected_rows == 0)
+			return false;
+		return true;
+	}
+
 
 	public function saltPassword($password)
 	{

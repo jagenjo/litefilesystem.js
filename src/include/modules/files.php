@@ -8,7 +8,7 @@ class FilesModule
 	private static $MAX_USERS_PER_UNIT = 1000;
 	private static $DEFAULT_UNIT_SIZE = 5000000;
 	private static $UNIT_MIN_SIZE = 1048576; //in bytes
-	private static $UNIT_MAX_SIZE = 209715200; //in bytes
+	private static $UNIT_MAX_SIZE = 509715200; //in bytes
 	private static $PREVIEW_IMAGE_SIZE = 128; //in pixels
 	private static $MAX_PREVIEW_FILE_SIZE = 300000;//in bytes
 	private static $ALLOW_REMOTE_FILES = ALLOW_REMOTE_FILE_DOWNLOADING; //allow to download remote files
