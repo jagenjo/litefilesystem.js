@@ -18,6 +18,47 @@ Installing
 
 Check the [install guide](INSTALL.md) to see a step by step process of how to install it in your server.
 
+Usage
+----------
+
+Once installed you can include the ```litefileserver.js``` script in your project you must first login:
+
+```javascript
+var lfs = LFS.setup("myhost", onReady );
+var session = null;
+
+//check to see if the server is available
+function onReady()
+{
+   LFS.login( username, password, onLogin );
+}
+
+function onLogin( my_session, err )
+{
+   if(!session)
+      throw("error login in:", err);
+   session = my_session;
+}
+```
+
+Once logged you can fetch for files and folders using the session:
+
+```javascript
+
+session.getUnitsAndFolders( function(units) {
+  //units contain info about every unit and which folders it has
+});
+
+session.getFiles( unit_id, folder, function( files ) {
+  //info about the files in that folder
+});
+
+```
+
+Check the ```LFS.Session``` class for more info about all the actions you can perform (create folders, units, give privileges, upload files, etc).
+
+Also check the demo in the src folder to see an usage of the system.
+
 Feedback
 --------
 
