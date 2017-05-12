@@ -753,9 +753,11 @@ class UsersModule
 	{
 		$username = addslashes($username);
 		$password = addslashes($password);
+
+		$username = strtolower( $username );
 		
 		$userquery = " WHERE `username` = '". $username ."' ";
-		if( filter_var($username, FILTER_VALIDATE_EMAIL) )
+		if( filter_var($username, FILTER_VALIDATE_EMAIL) ) //if it is an email
 			$userquery = " WHERE `email` = '". $username ."' ";
 
 		$passquery = "";
@@ -796,7 +798,7 @@ class UsersModule
 	}
 
 	//check if token is valid, returns user associated to this token
-	public function checkToken($token, $keep_info = false)
+	public function checkToken( $token, $keep_info = false )
 	{
 		if(self::$MASTER_TOKEN != "" && $token == self::$MASTER_TOKEN)
 			return $this->getUser(1); //return admin
@@ -951,9 +953,10 @@ class UsersModule
 		return $user;
 	}
 
-	public function getUserByName($username)
+	public function getUserByName( $username )
 	{
-		$username = addslashes($username);
+		$username = strtolower( $username );
+		$username = addslashes( $username );
 
 		$database = getSQLDB();
 		$query = "SELECT * FROM `".DB_PREFIX."users` WHERE username = '". $username ."' LIMIT 1";
@@ -967,10 +970,10 @@ class UsersModule
 		return $user;
 	}
 
-
 	public function getUserByMail($email)
 	{
-		$email = addslashes($email);
+		$email = strtolower( $email );
+		$email = addslashes( $email );
 
 		$database = getSQLDB();
 		$query = "SELECT * FROM `".DB_PREFIX."users` WHERE email = '". $email ."' LIMIT 1";
@@ -990,8 +993,11 @@ class UsersModule
 	}
 
 	//total_space in bytes
-	public function createUser($username, $password, $email, $roles = "", $data = "", $status = "VALID", $total_space = 0)
+	public function createUser( $username, $password, $email, $roles = "", $data = "", $status = "VALID", $total_space = 0)
 	{
+		$username = strtolower( $username );
+		$email = strtolower( $email );
+
 		if(!$this->validateUsername($username))
 		{
 			debug("error creating user: invalid username");

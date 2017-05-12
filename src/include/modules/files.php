@@ -3148,13 +3148,18 @@ class FilesModule
 
 	public function deletePreview($fullpath)
 	{
-		$path_info = $this->parsePath( $fullpath, true );
+		//debug( "fullpath: " . $fullpath );
+		$path_info = $this->parsePath( $fullpath );
 
 		$filename = $path_info->unit . "/" . $path_info->folder . "/" . PREVIEW_PREFIX . $path_info->filename . PREVIEW_SUFIX;
-
+		//debug( "final path: ".$filename );
+		//debug( print_r( $path_info ) );
 		//no preview
 		if(!$this->fileExist( $filename ) )
+		{
+			debug("preview not found");
 			return false;
+		}
 
 		$result = self::deleteFile( $filename );
 		if(!$result)

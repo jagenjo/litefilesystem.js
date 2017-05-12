@@ -847,23 +847,22 @@ Session.prototype.getFilesByPath = function( fullpath, on_complete, on_error )
 	});
 }
 
-Session.prototype.searchByCategory = function( category, on_complete )
+Session.prototype.searchByCategory = function( category, on_complete, on_error, on_progress  )
 {
 	return this.request( this.server_url,{ action: "files/searchFiles", category: category }, function(resp){
-
 		Session.processFileList(resp.data);
 		if(on_complete)
 			on_complete(resp.data);
-	});
+	}, on_error, on_progress );
 }
 
-Session.prototype.searchByFilename = function( filename, on_complete )
+Session.prototype.searchByFilename = function( filename, on_complete, on_error, on_progress )
 {
 	return this.request( this.server_url,{ action: "files/searchFiles", filename: filename }, function(resp){
 		Session.processFileList(resp.data);
 		if(on_complete)
 			on_complete(resp.data);
-	});
+	}, on_error, on_progress );
 }
 
 Session.prototype.getFileInfo = function( fullpath, on_complete )
@@ -1083,7 +1082,7 @@ Session.prototype.uploadFile = function( fullpath, data, extra, on_complete, on_
 
 
 	//generate preview and request if they are images
-	if(LFS.generate_preview && LFS.previews == "local" && extensions.indexOf(ext) != -1 )
+	if(!params.preview && LFS.generate_preview && LFS.previews == "local" && extensions.indexOf(ext) != -1 )
 	{
 		LFS.generatePreview( data, function( prev_data ) {
 			params.preview = prev_data;
