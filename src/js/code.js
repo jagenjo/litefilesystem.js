@@ -284,16 +284,20 @@ function systemReady()
 		}
 	  });
 
+	 var selected_user = null;
+
 	$("#userinfo-dialog .search-user-button").click( function(e) {
 		var username = $("#userinfo-dialog .usernameInput").val();
 		if(!username)
 			return;
 
 		session.getUserInfo( username, function(user, resp) { 
+			selected_user = user;
 			if(!user)
 			{
 				$("#userinfo-dialog .user-name").val( "" );
 				$("#userinfo-dialog .user-email").val( "" );
+				$("#userinfo-dialog .user-roles").val( "" );
 				$("#userinfo-dialog .user-totalspace").val( "" );
 				return;
 			}
@@ -301,6 +305,7 @@ function systemReady()
 			$("#userinfo-dialog .user-name").val( user.username );
 			$("#userinfo-dialog .user-email").val( user.email );
 			$("#userinfo-dialog .user-totalspace").val( user.total_space );
+			$("#userinfo-dialog .user-roles").val( Object.keys( user.roles ) );
 		});
 	});
 
@@ -323,6 +328,44 @@ function systemReady()
 
 		} );
 	});
+
+	$("#userinfo-dialog .setpassword-user-button").click( function(e) {
+	
+		var username = $("#userinfo-dialog .user-name").val();
+		var newpass = $("#userinfo-dialog .user-newpassword").val();
+		if(!username || !newpass)
+		{
+			bootbox.alert("Something is missing");
+			return;
+		}
+
+		session.adminChangeUserPassword( username, newpass, function(v,resp){
+			if(v != 1)
+			{
+				$("#userinfo-dialog p").html(resp.msg);
+				$("#userinfo-dialog .alert").alert();
+			}
+			else
+				bootbox.alert("User password changed");
+		});
+	});
+
+	$("#userinfo-dialog .change-user-role").click( function(e) {
+			if(!selected_user)
+				return;
+
+			var username = selected_user.username;
+			var mode = this.dataset["mode"];
+			if( selected_user.roles[ mode ] )
+				session.removeUserRole( username, mode, function(r){
+					 $("#userinfo-dialog .search-user-button").click();
+				});
+			else
+				session.addUserRole( username, mode, function(r){
+					 $("#userinfo-dialog .search-user-button").click();
+				});
+	});
+
 
 	$("#userinfo-dialog .delete-user-button").click( function(e) {
 
@@ -795,6 +838,8 @@ function refreshFiles( fullpath, on_complete )
 
 function onRenameFile(e){
 	var fullpath = this.dataset["path"];
+	if(!fullpath)
+		fullpath = this.parentNode.parentNode.dataset["path"];
 	var info = LFS.parsePath(fullpath);
 	var filename = info.filename;
 	bootbox.prompt({ title:"New filename",
@@ -817,6 +862,8 @@ function onRenameFile(e){
 
 function onDeleteFile(e){
 	var fullpath = this.dataset["path"];
+	if(!fullpath)
+		fullpath = this.parentNode.parentNode.dataset["path"];
 
 	bootbox.confirm("Are you sure?", function(result) {
 		if(result)
@@ -839,6 +886,9 @@ function onDeleteFile(e){
 function onEditFile()
 {
 	var fullpath = this.dataset["path"];
+	if(!fullpath)
+		fullpath = this.parentNode.parentNode.dataset["path"];
+
 	var info = LFS.parsePath(fullpath);
 	var filename = info.filename;
 

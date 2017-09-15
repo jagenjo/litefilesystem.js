@@ -200,6 +200,18 @@ function refreshUnitSetup( unit_name )
 			});
 		});
 
+		$(".change-user-privileges").click(function(){
+			var username = this.parentNode.parentNode.parentNode.parentNode.dataset["username"];
+			var mode = this.dataset["mode"];
+			session.setUserPrivileges( current_unit, username, mode, function(status, resp){
+				if(status)
+					refreshUnitSetup( current_unit );						
+				else
+					bootbox.alert( resp.msg );
+			});
+		});
+
+
 	});
 }
 

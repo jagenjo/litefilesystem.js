@@ -4,7 +4,7 @@ class FilesModule
 {
 	// List of internal configurable variables
 	//********************************************
-	private static $MAX_UNITS_PER_USER = 5; 
+	private static $MAX_UNITS_PER_USER = 10; 
 	private static $MAX_USERS_PER_UNIT = 1000;
 	private static $DEFAULT_UNIT_SIZE = 5000000;
 	private static $UNIT_MIN_SIZE = 1048576; //in bytes
@@ -39,6 +39,7 @@ class FilesModule
 			case "createUnit": $this->actionCreateUnit(); break; //create a new unit
 			case "getUnits": $this->actionGetUnits(); break; //get files inside one folder
 			case "inviteUserToUnit": $this->actionInviteUserToUnit(); break; //create a new unit
+			case "setUserPrivileges": $this->actionSetUserPrivileges(); break; //create a new unit
 			case "removeUserFromUnit": $this->actionRemoveUserFromUnit(); break; //create a new unit
 			case "joinUnit": $this->actionJoinUnit(); break; //join an existing unit
 			case "leaveUnit": $this->actionLeaveUnit(); break; //leave an existing unit
@@ -257,6 +258,107 @@ class FilesModule
 		return true;
 	}
 
+	//this function is exactly the same as the one above
+	public function actionSetUserPrivileges()
+	{
+		$user = $this->getUserByToken();
+		if(!$user) //result already filled in getTokenUser
+			return;
+
+		$max_units = self::$MAX_UNITS_PER_USER;
+
+		if(!isset($_REQUEST["unit_name"]) || !isset($_REQUEST["username"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$unit_name = $_REQUEST["unit_name"];
+		if($unit_name == "")
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'wrong unit name';
+			return;
+		}
+
+		//get unit only if user has rights
+		$unit = $this->getUnitByName( $unit_name, !$user->roles["admin"] ? $user->id : -1 );
+		if(!$unit)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'unit not found or not allowed: ' . $unit_name;
+			return;
+		}
+
+		//check how many users does this unit have
+		$users = $this->getUnitUsers( $unit->id );
+		if( count($users) >= self::$MAX_USERS_PER_UNIT && !$user->roles["admin"])
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'too many users in this unit';
+			return;
+		}
+
+		//get other user
+		$usermodule = getModule("user");
+		$target_username = $_REQUEST["username"];
+		$target_user = null;
+		if( filter_var($target_username, FILTER_VALIDATE_EMAIL) )
+			$target_user = $usermodule->getUserByMail($target_username);
+		else
+			$target_user = $usermodule->getUserByName($target_username);
+
+		if(!$target_user)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'user not found';
+			return;
+		}
+
+		//check how many units does he have
+		$units = $this->getUserUnits($target_user->id);
+		if($max_units > 0 && count($units) >= $max_units && !$user->roles["admin"])
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'too many units';
+			return;
+		}
+
+		$mode = "READ";
+		if(isset($_REQUEST["mode"]))
+			$mode = $_REQUEST["mode"];
+		if($mode != "READ" && $mode != "WRITE")
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'wrong mode';
+			return;
+		}
+
+		//is already in unit
+		foreach($units as $i => $u)
+		{
+			if($u->name == $unit_name && $u->mode == $mode)
+			{
+				$this->result["status"] = -1;
+				$this->result["msg"] = 'user already has this mode';
+				return;
+			}
+		}
+
+		//add privileges
+		if( !$this->setPrivileges($unit->id, $target_user->id, $mode ) )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'problem giving rights to unit';
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["msg"] = 'user mode changed';
+		return true;
+	}
+	
 	public function actionRemoveUserFromUnit()
 	{
 		$user = $this->getUserByToken();
@@ -2200,7 +2302,7 @@ class FilesModule
 
 	public function onSystemInfo( &$info )
 	{
-		$max_upload = (int)(ini_get('upload_max_filesize'));
+		$max_upload = (int)(ini_get('upload_max_filesize')); //in MBs
 		$max_post = (int)(ini_get('post_max_size'));
 		$memory_limit = (int)(ini_get('memory_limit'));
 		$upload_mb = min($max_upload, $max_post, $memory_limit);
@@ -2210,7 +2312,7 @@ class FilesModule
 		$info["memory_limit"] = $memory_limit;
 		$info["allow_big_files"] = ALLOW_BIG_FILES;
 
-		$info["max_filesize"] = $upload_mb * 1024*1024;
+		$info["max_filesize"] = $upload_mb * 1024*1024; //max per request
 		$info["max_units"] = self::$MAX_UNITS_PER_USER;
 		$info["unit_max_size"] = self::$UNIT_MAX_SIZE;
 		$info["unit_min_size"] = self::$UNIT_MIN_SIZE;
@@ -3300,15 +3402,16 @@ class FilesModule
 		}
 
 		$filter = "";
-		if( $user_id != -1 && $unit->mode != "ADMIN" )
+		if( $user_id != -1 && $unit->mode != "ADMIN" && $unit->mode != "WRITE" )
 			$filter = " AND author_id = " . intval( $user_id );
 
 		//delete from DB
 		$query = "DELETE FROM `".DB_PREFIX."files` WHERE `id` = ". $file_id . " " . $filter;
+		debug($query);
 		$result = $database->query( $query );
 		if(!isset($database->affected_rows) || $database->affected_rows == 0)
 		{
-			$this->last_error = "File dont belong to user";
+			$this->last_error = "File cannot be deleted, (maybe it doesnt have rights)";
 			return false;
 		}
 
@@ -4049,7 +4152,7 @@ class FilesModule
 		$wildcard = addslashes($wildcard);
 
 		$database = getSQLDB();
-		$query = "SELECT * FROM `".DB_PREFIX."files` WHERE `filename` = '" . $wildcard . "' AND unit_id = ".intval($unit_id) . " LIMIT " . intval($offset) . "," . intval($limit);
+		$query = "SELECT * FROM `".DB_PREFIX."files` WHERE `filename` = '" . $wildcard . "' AND unit_id = ".intval($unit_id) . " ORDER BY `timestamp` DESC LIMIT " . intval($offset) . "," . intval($limit);
 		//debug($query);
 
 		$result = $database->query( $query );
@@ -4068,7 +4171,7 @@ class FilesModule
 		$category = addslashes($category);
 
 		$database = getSQLDB();
-		$query = "SELECT * FROM `".DB_PREFIX."files` WHERE `category` = '" . $category . "' AND unit_id = ".intval($unit_id) . " LIMIT " . intval($offset) . "," . intval($limit);
+		$query = "SELECT * FROM `".DB_PREFIX."files` WHERE `category` = '" . $category . "' AND unit_id = ".intval($unit_id) . " ORDER BY `timestamp` DESC LIMIT " . intval($offset) . "," . intval($limit);
 		//debug($query);
 
 		$result = $database->query( $query );
@@ -4082,7 +4185,7 @@ class FilesModule
 		return $files;		
 	}
 
-
+	//ensures the total size of a unit matches the sum of all files in that unit
 	public function recomputeUnitSize( $unit_id = -1 )
 	{
 		$unit_id = intval($unit_id);
@@ -4109,6 +4212,16 @@ class FilesModule
 		}
 
 		return true;
+	}
+
+	//this function check that all the files in the unit have a DB entry
+	public function checkUnit( $unit_id )
+	{
+		//get a list with all the files
+
+
+		//for every file check if there is an entry at the DB
+
 	}
 
 	public function actionDebug()

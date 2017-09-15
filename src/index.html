@@ -94,23 +94,25 @@
 		<div class='units-list'>
 			<span class="content"></span>
 
-			<span class="visible-md-inline visible-lg-inline">
+			<span class="">
 				<button title="create unit" class="create-unit-button btn" data-dismiss="modal" data-toggle="modal" data-target="#new-unit-dialog"><span class="glyphicon glyphicon-hdd" aria-hidden="true"></span> <span class="glyphicon glyphicon-plus" aria-hidden="true"></span></button>
 				<button title="refresh units" class="refresh-units-button btn"><span class="glyphicon glyphicon-refresh" aria-hidden="true"></span></button>
 				<button title="setup units" class="setup-unit-button btn btn-primary" data-dismiss="modal" data-toggle="modal" data-target="#setup-unit-dialog"><span class="glyphicon glyphicon-cog" aria-hidden="true"></span></button>
 			</span>
 
+		<!--
           <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
             <span class="sr-only">Toggle navigation</span>
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
+		 -->
 
 		</div>
 
         </div>
-        <div id="navbar" class="collapse navbar-collapse">
+        <div id="navbar" class="">
           <ul class="nav navbar-nav navbar-right">
 			<li>
 				<div class='quota'>
@@ -219,7 +221,7 @@
       <form>
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-       <h2 class="form-signin-heading">Configure Unit</h2>
+       <h2 class="form-signin-heading">Unit Information</h2>
       </div>
       <div class="modal-body">
         <label>Name <span class='unitname'></span></label>
@@ -246,7 +248,8 @@
 				<span class="caret"></span>
 			  </button>
 			  <ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="dropdownMenu1">
-				<li role="presentation"><a role="menuitem" tabindex="-1" href="#">Change privileges</a></li>
+				<li role="presentation"><a class='change-user-privileges' role="menuitem" data-mode="WRITE" tabindex="-1" href="#">Set as WRITE</a></li>
+				<li role="presentation"><a class='change-user-privileges' role="menuitem" data-mode="READ" tabindex="-1" href="#">Set as READ</a></li>
 				<li role="presentation"><a class='remove-user-unit-button' role="menuitem" tabindex="-1" href="#">Remove</a></li>
 			  </ul>
 			</div>
@@ -434,15 +437,40 @@
 				  </span>
 				</div><!-- /input-group -->
 			</div>
-				<div class="alert alert-danger alert-dismissible fade in" role="alert" style="display: none">
-				  <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span></button>
-				  <p></p>
-				</div>
+			<div class="form-group">
+				<label for="exampleInputSpace">Change Password</label>
+				<div class="input-group">
+				  <input type="text" class="user-newpassword usernameInput form-control" placeholder="new password">
+				  <span class="input-group-btn">
+					<button class="setpassword-user-button btn btn-default btn-danger" type="button">Change</button>
+				  </span>
+				</div><!-- /input-group -->
+			</div>
+			<div class="form-group">
+				<label for="exampleInputSpace">Roles</label>
+				<div class="input-group">
+				  <input type="text" class="user-roles form-control" placeholder="">
+				  <span class="input-group-btn">
+					<button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenuRoles" data-toggle="dropdown" aria-expanded="true">
+						Set Role
+						<span class="caret"></span>
+					</button>
+					<ul class="dropdown-menu dropdown-menu-left" role="menu" aria-labelledby="dropdownMenuRoles">
+						<li role="presentation"><a class='change-user-role' role="menuitem" data-mode="user" tabindex="-1" href="#">User</a></li>
+						<li role="presentation"><a class='change-user-role' role="menuitem" data-mode="admin" tabindex="-1" href="#">Admin</a></li>
+					</ul>
+				</span>
+				</div><!-- /input-group -->
+			</div>
+			<div class="alert alert-danger alert-dismissible fade in" role="alert" style="display: none">
+			  <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span></button>
+			  <p></p>
+			</div>
 		</div>
 
       </div>
       <div class="modal-footer">
-        <button class="delete-user-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete Account</span></button>
+		<button class="delete-user-button btn btn-primary ladda-button" data-style="slide-up" data-color="red"><span class="ladda-label">Delete Account</span></button>
       </div>
       </form>
     </div><!-- /.modal-content -->

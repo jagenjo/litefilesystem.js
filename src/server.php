@@ -1,5 +1,7 @@
 <?php
 
+//if used as cli, you can pass parameters like this:  php server.php 'action=...&value=...'
+
 //all responses must be JSON
 header('Content-Type: application/json');
 

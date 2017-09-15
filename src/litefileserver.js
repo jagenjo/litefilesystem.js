@@ -478,6 +478,14 @@ Session.prototype.setPassword = function( oldpass, newpass, on_complete )
 	return true;
 }
 
+Session.prototype.adminChangeUserPassword = function(username, password, on_complete)
+{
+	return this.request( this.server_url,{action: "user/changeUserPassword", username: username, pass: password }, function(resp){
+		if(on_complete)
+			on_complete(resp.status == 1, resp);
+	});
+}
+
 Session.prototype.getUserData = function( on_complete )
 {
 	var params = { action: "user/getUserData" };
@@ -539,6 +547,23 @@ Session.prototype.setUserSpace = function( username, space, on_complete )
 	});
 }
 
+Session.prototype.addUserRole = function( username, role, on_complete )
+{
+	var that = this;
+	return this.request( this.server_url,{action: "user/addRole", username: username, role: role }, function(resp){
+		if(on_complete)
+			on_complete(resp.status, resp);
+	});
+}
+
+Session.prototype.removeUserRole = function( username, role, on_complete )
+{
+	var that = this;
+	return this.request( this.server_url,{action: "user/removeRole", username: username, role: role }, function(resp){
+		if(on_complete)
+			on_complete(resp.status, resp);
+	});
+}
 
 //units
 Session.prototype.createUnit = function(unit_name, size, on_complete)
@@ -611,6 +636,16 @@ Session.prototype.removeUserFromUnit = function(unit_name, username, on_complete
 			on_complete(resp.status == 1, resp);
 	});
 }
+
+Session.prototype.setUserPrivileges = function(unit_name, username, mode, on_complete)
+{
+	return this.request( this.server_url,{action: "files/setUserPrivileges", unit_name: unit_name, username: username, mode: mode }, function(resp){
+		if(on_complete)
+			on_complete(resp.status == 1, resp);
+	});
+}
+
+
 
 //get size, and users
 Session.prototype.getUnitInfo = function(unit_name, on_complete)

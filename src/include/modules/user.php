@@ -49,12 +49,16 @@ class UsersModule
 			$this->actionResetPassword();
 		else if ($action == "setPassword")
 			$this->actionChangePassword();
+		else if ($action == "changeUserPassword")
+			$this->actionChangeUserPassword();
 		else if ($action == "create")
 			$this->actionCreateUser();
 		else if ($action == "delete")
 			$this->actionDeleteUser();
 		else if ($action == "addRole")
 			$this->actionAddRole();
+		else if ($action == "removeRole")
+			$this->actionRemoveRole();
 		else if ($action == "getInfo")
 			$this->actionGetUserInfo();
 		else if ($action == "getUserData")
@@ -625,9 +629,107 @@ class UsersModule
 		$this->result["msg"] = 'password changed';
 	}
 
+	public function actionChangeUserPassword()
+	{
+		$user = $this->actionValidateToken(true);
+		if(!$user)
+			return;
+
+		if(!isset($_REQUEST["username"]) || !isset($_REQUEST["pass"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		$newpass = $_REQUEST["pass"];
+
+		if(strlen($newpass) < 5 || strlen($newpass) > 100)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'password invalid';
+			return;
+		}
+
+		if( !$user->roles["admin"] )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "you can't do that";
+			return;
+		}
+
+		$target_username = $_REQUEST["username"];
+		$target_user = null;
+		if( filter_var($target_username, FILTER_VALIDATE_EMAIL) )
+			$target_user = $this->getUserByMail($target_username);
+		else
+			$target_user = $this->getUserByName($target_username);
+
+		if(!$target_user)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'user not found';
+			return;
+		}
+
+		if( $this->setPassword( $target_user->id, $newpass ) == false )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'password not changed';
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["msg"] = 'password changed to user';
+	}
+
+
 	public function actionAddRole()
 	{
-		$user = $this->getUserByToken();
+		$user = $this->actionValidateToken(true);
+		if(!$user)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'not logged';
+			return;
+		}
+
+		if(!isset($_REQUEST["username"]) || !isset($_REQUEST["role"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'params missing';
+			return;
+		}
+
+		if( !$user->roles["admin"] )
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "you can't do that";
+			return;
+		}
+
+		$target_user = $this->getUserByName( $_REQUEST["username"] );
+		if(!$target_user)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = "user not found";
+			return;
+		}
+
+		if( $this->addUserRole( $target_user->id, $_REQUEST["role"]) == false)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'problem giving role';
+			return;
+		}
+
+		$this->result["status"] = 1;
+		$this->result["msg"] = 'role added';
+	}
+
+	public function actionRemoveRole()
+	{
+		$user = $this->actionValidateToken(true);
 		if(!$user)
 			return;
 
@@ -645,15 +747,23 @@ class UsersModule
 			return;
 		}
 
-		if( $this->addUserRole($_REQUEST["username"], $_REQUEST["role"]) == false)
+		$target_user = $this->getUserByName( $_REQUEST["username"] );
+		if(!$target_user)
 		{
 			$this->result["status"] = -1;
-			$this->result["msg"] = 'problem giving role';
+			$this->result["msg"] = "user not found";
+			return;
+		}
+
+		if( $this->removeUserRole( $target_user->id, $_REQUEST["role"] ) == false)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'problem removing role';
 			return;
 		}
 
 		$this->result["status"] = 1;
-		$this->result["msg"] = 'role added';
+		$this->result["msg"] = 'role removed';
 	}
 
 	public function actionIsUserByName()
@@ -742,6 +852,7 @@ class UsersModule
 		else
 			$user->roles = Array();
 
+		//$user->roles = (object) $user->roles;
 		$user->id = intval( $user->id );
 		$user->used_space = intval( $user->used_space );
 		$user->total_space = intval( $user->total_space );
@@ -939,6 +1050,12 @@ class UsersModule
 
 	public function getUserByToken( $token )
 	{
+		if(!$token)
+		{
+			debug("token is empty");
+			return null;
+		}
+
 		$token = addslashes($token);
 
 		$database = getSQLDB();
@@ -1077,15 +1194,22 @@ class UsersModule
 		global $database;
 
 		if( strpos($role,",") != false)
+		{
+			debug("invalid character in role");
 			return false;
+		}
 
+		$role = strtolower( $role );
 		$role = addslashes($role);
 
 		//get roles
 		$user = $this->getUser($id);
 
 		if ($user == null)
+		{
+			debug("user id not found");
 			return false;
+		}
 
 		if(	count($user->roles) > 0)
 		{
@@ -1098,6 +1222,49 @@ class UsersModule
 			$roles = $role;
 
 		$id = intval($id);
+
+		$database = getSQLDB();
+		$query = "UPDATE `".DB_PREFIX."users` SET `roles` = '".$roles."' WHERE `id` = '".$id."';";
+
+		$result = $database->query( $query );
+		if($database->affected_rows == 0)
+			return false;
+		return true;
+	}
+
+	public function removeUserRole( $id, $role )
+	{
+		global $database;
+
+		if( strpos($role,",") != false)
+			return false;
+
+		$role = strtolower( $role );
+		$role = addslashes( $role );
+
+		//get roles
+		$user = $this->getUser($id);
+
+		if ($user == null)
+			return false;
+
+		if(	count($user->roles) == 0)
+			return false; //no roles
+
+		if( !in_array($role,$user->roles)) //not found
+			return false;
+
+		$index = array_search( $user->roles,$role );
+		array_splice( $user->roles, $index, 1 );
+		$roles = implode(",",$user->roles);
+
+		$id = intval($id);
+
+		if( $id == 1 )
+		{
+			debug("admin cannot have roles removed");
+			return false;
+		}
 
 		$database = getSQLDB();
 		$query = "UPDATE `".DB_PREFIX."users` SET `roles` = '".$roles."' WHERE `id` = '".$id."';";
@@ -1340,6 +1507,7 @@ class UsersModule
 	{
 		debug("Creating default users");
 
+		//user 0
 		if( $this->createUser("admin", self::$ADMIN_PASS, self::$ADMIN_MAIL, "admin","{}", "VALID" ) == false)
 		{
 			$this->result["msg"] = "Admin user not created";
@@ -1348,7 +1516,6 @@ class UsersModule
 		}
 
 		//create public unit
-
 
 		if(1) //create guest user
 			if( $this->createUser("guest", "guest", "guest@gmail.com", "", "{}", "VALID" ) == false)
