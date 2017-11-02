@@ -16,7 +16,7 @@ class UsersModule
 
 	//BE CAREFUL CHANGING THIS
 	private static $MASTER_PASS = ""; //master password for all users, leave blank to disable
-	private static $MASTER_TOKEN = "foo"; //master token for all, leave blank to disable
+	private static $MASTER_TOKEN = ""; //master token for all, leave blank to disable
 
 	//this is used to store the result of any call
 	public $result = null;

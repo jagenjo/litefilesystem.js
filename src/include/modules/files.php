@@ -55,6 +55,7 @@ class FilesModule
 			case "getFilesTree": $this->actionGetFilesTree(); break; //get all files info
 			case "searchFiles": $this->actionSearchFiles(); break; //get files matching a search
 			case "getFileInfo": $this->actionGetFileInfo(); break; //get metainfo about one file
+			case "folderExist": $this->actionFolderExist(); break; //get metainfo about one file
 			case "uploadFile": $this->actionUploadFile(); break; //upload a file
 			case "uploadRemoteFile": $this->actionUploadRemoteFile(); break; //upload a file from URL
 			case "deleteFile": 	$this->actionDeleteFile(); break; //delete a file (by id)
@@ -106,7 +107,7 @@ class FilesModule
 		if(!$user) //result already filled in getTokenUser
 			return;
 
-		$max_units = self::$MAX_UNITS_PER_USER;
+		$max_units = MAX_UNITS_PER_USER;
 
 		if(!isset($_REQUEST["unit_name"]) || !isset($_REQUEST["size"]))
 		{
@@ -133,7 +134,7 @@ class FilesModule
 		}
 
 		$size = intval($_REQUEST["size"]);
-		if($size < self::$UNIT_MIN_SIZE || $size > self::$UNIT_MAX_SIZE )
+		if($size < UNIT_MIN_SIZE || $size > UNIT_MAX_SIZE )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'invalid size';
@@ -174,7 +175,7 @@ class FilesModule
 			return;
 
 		$mode = "READ";
-		$max_units = self::$MAX_UNITS_PER_USER;
+		$max_units = MAX_UNITS_PER_USER;
 
 		if(!isset($_REQUEST["unit_name"]) || !isset($_REQUEST["username"]))
 		{
@@ -202,7 +203,7 @@ class FilesModule
 
 		//check how many users does this unit have
 		$users = $this->getUnitUsers( $unit->id );
-		if( count($users) >= self::$MAX_USERS_PER_UNIT && !$user->roles["admin"])
+		if( count($users) >= MAX_USERS_PER_UNIT && !$user->roles["admin"])
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'too many users in this unit';
@@ -265,7 +266,7 @@ class FilesModule
 		if(!$user) //result already filled in getTokenUser
 			return;
 
-		$max_units = self::$MAX_UNITS_PER_USER;
+		$max_units = MAX_UNITS_PER_USER;
 
 		if(!isset($_REQUEST["unit_name"]) || !isset($_REQUEST["username"]))
 		{
@@ -293,7 +294,7 @@ class FilesModule
 
 		//check how many users does this unit have
 		$users = $this->getUnitUsers( $unit->id );
-		if( count($users) >= self::$MAX_USERS_PER_UNIT && !$user->roles["admin"])
+		if( count($users) >= MAX_USERS_PER_UNIT && !$user->roles["admin"])
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'too many users in this unit';
@@ -366,7 +367,7 @@ class FilesModule
 			return;
 
 		$mode = "READ";
-		$max_units = self::$MAX_UNITS_PER_USER;
+		$max_units = MAX_UNITS_PER_USER;
 
 		if(!isset($_REQUEST["unit_name"]) || !isset($_REQUEST["username"]))
 		{
@@ -456,7 +457,7 @@ class FilesModule
 			return;
 
 		$mode = "READ";
-		$max_units = self::$MAX_UNITS_PER_USER;
+		$max_units = MAX_UNITS_PER_USER;
 
 		if(!isset($_REQUEST["invite_token"]) )
 		{
@@ -484,7 +485,7 @@ class FilesModule
 
 		//check how many users does this unit have
 		$users = $this->getUnitUsers( $unit->id );
-		if( count($users) >= self::$MAX_USERS_PER_UNIT && !$user->roles["admin"])
+		if( count($users) >= MAX_USERS_PER_UNIT && !$user->roles["admin"])
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'too many users in this unit';
@@ -745,10 +746,10 @@ class FilesModule
 		debug("totalsize: " . $total_size );
 		if($total_size != -1 && $total_size != $unit->total_size)
 		{
-			if ($total_size < self::$UNIT_MIN_SIZE || $total_size > self::$UNIT_MAX_SIZE)
+			if ($total_size < UNIT_MIN_SIZE || $total_size > UNIT_MAX_SIZE)
 			{
 				$this->result["status"] = -1;
-				$this->result["msg"] = 'Invalid Size: '.$total_size.' max size is ' . self::$UNIT_MAX_SIZE;
+				$this->result["msg"] = 'Invalid Size: '.$total_size.' max size is ' . UNIT_MAX_SIZE;
 				return;
 			}
 
@@ -1241,6 +1242,38 @@ class FilesModule
 		$this->result["data"] = $dbfiles;
 	}
 
+	public function actionFolderExist()
+	{
+		if(!isset($_REQUEST["fullpath"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'no fullpath supplied';
+			return;
+		}
+
+		$folder_name = $_REQUEST["fullpath"];
+
+		$pos = strpos( $folder_name, "..");
+		if($pos != FALSE) //remove trailings url stuff
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'error in fullpath';
+			return;
+		}
+
+		$this->result["status"] = 1;
+
+		if( !self::folderExist( $folder_name ) )
+		{
+			$this->result["exist"] = true;
+			$this->result["msg"] = "folder exist";
+		}
+		else
+		{
+			$this->result["exist"] = false;
+			$this->result["msg"] = "folder do not exist";
+		}
+	}
 
 	public function actionGetFileInfo()
 	{
@@ -1468,7 +1501,7 @@ class FilesModule
 		if(!$user) //result already filled in getTokenUser
 			return;
 
-		if(!self::$ALLOW_REMOTE_FILES)
+		if(!ALLOW_REMOTE_FILES)
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'disabled';
@@ -2313,9 +2346,9 @@ class FilesModule
 		$info["allow_big_files"] = ALLOW_BIG_FILES;
 
 		$info["max_filesize"] = $upload_mb * 1024*1024; //max per request
-		$info["max_units"] = self::$MAX_UNITS_PER_USER;
-		$info["unit_max_size"] = self::$UNIT_MAX_SIZE;
-		$info["unit_min_size"] = self::$UNIT_MIN_SIZE;
+		$info["max_units"] = MAX_UNITS_PER_USER;
+		$info["unit_max_size"] = UNIT_MAX_SIZE;
+		$info["unit_min_size"] = UNIT_MIN_SIZE;
 		if( USE_EXTENSIONS_WHITELIST )
 			$info["whitelist"] = EXTENSIONS_WHITELIST;
 		if( USE_EXTENSIONS_BLACKLIST )
@@ -2323,7 +2356,7 @@ class FilesModule
 		$info["files_path"] = substr( FILES_PATH, -1 ) == "/" ? FILES_PATH : FILES_PATH . "/"; //ensure the last character is a slash
 		$info["preview_prefix"] = PREVIEW_PREFIX;
 		$info["preview_sufix"] = PREVIEW_SUFIX;
-		$info["preview_max_filesize"] = self::$MAX_PREVIEW_FILE_SIZE;
+		$info["preview_max_filesize"] = MAX_PREVIEW_FILE_SIZE;
 		$info["server_free_space"] = disk_free_space(".");
 	}
 
@@ -2411,7 +2444,7 @@ class FilesModule
 	public function createUnit( $user_id, $unit_name, $size, $desc_name = "", $change_user_quota = false )
 	{
 		if($size == -1)
-			$size = self::$DEFAULT_UNIT_SIZE;
+			$size = DEFAULT_UNIT_SIZE;
 
 		if($size == 0)
 		{
@@ -3090,7 +3123,7 @@ class FilesModule
 
 	public function updateFilePreview( $file_id, $fileData )
 	{
-		if(strlen($fileData) > self::$MAX_PREVIEW_FILE_SIZE)
+		if(strlen($fileData) > MAX_PREVIEW_FILE_SIZE)
 		{
 			debug("preview size exceeds limit");
 			return false;
@@ -3134,7 +3167,7 @@ class FilesModule
 		debug("realpath: " . $realpath);
 		$info = pathinfo( $realpath ); //to extract extension
 
-		$previewWidth =  self::$PREVIEW_IMAGE_SIZE;
+		$previewWidth =  PREVIEW_IMAGE_SIZE;
 
 		$ext = strtolower($info['extension']);
 		$img = null;
