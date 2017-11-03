@@ -1263,7 +1263,7 @@ class FilesModule
 
 		$this->result["status"] = 1;
 
-		if( !self::folderExist( $folder_name ) )
+		if( self::folderExist( $folder_name ) )
 		{
 			$this->result["exist"] = true;
 			$this->result["msg"] = "folder exist";
