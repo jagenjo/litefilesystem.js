@@ -2443,12 +2443,18 @@ class FilesModule
 	//**************************************************
 	public function createUnit( $user_id, $unit_name, $size, $desc_name = "", $change_user_quota = false )
 	{
+		if(!defined("DEFAULT_UNIT_SIZE") || DEFAULT_UNIT_SIZE == 0)
+		{
+			debug("ERROR in createUnit: DEFAULT_UNIT_SIZE not defined");
+			return false;
+		}
+
 		if($size == -1)
 			$size = DEFAULT_UNIT_SIZE;
 
 		if($size == 0)
 		{
-			debug("ERROR: unit size is 0");
+			debug("ERROR in createUnit: unit size cannot be defined to 0");
 			return false;
 		}
 

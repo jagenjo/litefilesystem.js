@@ -122,14 +122,21 @@ function loadModules($str)
 	return $result;
 }
 
+//returns false if any of the events returned false, otherwise true
 function dispatchEventToModules($event_type, &$data )
 {
 	$modules = loadModules("*");
+	$result = true;
 	foreach($modules as $module)
 	{
-		if( method_exists($module, $event_type) )
-			call_user_func_array( array($module , $event_type), array(&$data));
+		if( !method_exists($module, $event_type) )
+			continue;
+
+		$r = call_user_func_array( array($module , $event_type), array(&$data));
+		if( $r === false)
+			$result = false;
 	}
+	return $result;
 }
 
 /* Resources Handlers ******************************/

@@ -331,7 +331,7 @@ class UsersModule
 			{
 				$this->result["status"] = -1;
 				$this->result["msg"] = 'not allowed to create user';
-				return;
+				return false;
 			}
 		}
 
@@ -341,14 +341,14 @@ class UsersModule
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'too many users created from this IP';
-			return;
+			return false;
 		}
 
 		if( !isset($_REQUEST["username"]) || !isset($_REQUEST["password"]) || !isset($_REQUEST["email"]))
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'params missing';
-			return;
+			return false;
 		}
 
 		$username = $_REQUEST["username"];
@@ -366,28 +366,28 @@ class UsersModule
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'username already in use';
-			return;
+			return false;
 		}
 
 		if($password == "" || strlen($password) < $this->minimum_password_size )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'wrong password';
-			return;
+			return false;
 		}
 
 		if( !filter_var($email, FILTER_VALIDATE_EMAIL) )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'wrong email';
-			return;
+			return false;
 		}
 
 		if( $this->getUserByMail($email) != null )
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'email already in use';
-			return;
+			return false;
 		}
 
 		$userdata = isset($_REQUEST["userdata"]) ? $_REQUEST["userdata"] : "{}";
@@ -397,7 +397,7 @@ class UsersModule
 		{
 			$this->result["status"] = -1;
 			$this->result["msg"] = 'problem creating the user';
-			return;
+			return false;
 		}
 
 		if(!isset($_SESSION["users_created"]))
@@ -411,6 +411,8 @@ class UsersModule
 		$this->result["status"] = 1;
 		$this->result["msg"] = 'user created';
 		$this->result["user_id"] = $id;
+
+		return true;
 	}
 
 	public function actionDeleteUser()
@@ -1159,7 +1161,14 @@ class UsersModule
 		}
 
 		$user = $this->getUser($id);
-		dispatchEventToModules("onUserCreated",$user);
+		$result = dispatchEventToModules("onUserCreated",$user);
+
+		//something went wrong creating the user
+		if ( $result == false )
+		{
+			$this->deleteUser( $user );
+			return false;		
+		}
 
 		return $id;
 	}
