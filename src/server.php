@@ -2,6 +2,8 @@
 
 //if used as cli, you can pass parameters like this:  php server.php 'action=...&value=...'
 
+//error_reporting(E_ALL ^ E_WARNING); 
+
 //all responses must be JSON
 header('Content-Type: application/json');
 

@@ -34,7 +34,7 @@ define('EXTENSIONS_BLACKLIST','exe,o,dll,php,py,rb,app,apk,bat,cmd,com,inx,ipa,i
 define('VALID_EXTENSIONS','png,jpg,jpeg,bmp,txt,json,js,css,html,htm,ttf,otf,wbin,dae');
 define('MAX_USERS_PER_UNIT', 1000);
 define('MAX_UNITS_PER_USER', 10); 
-define('DEFAULT_USER_SPACE', 10 ); //in MBs
+define('DEFAULT_USER_SPACE', 10 ); //in MBs, (TODO: if 0 no limit)
 define('DEFAULT_UNIT_SIZE', (10*1024*1024) ); //in bytes
 define('UNIT_MIN_SIZE', 1048576); //in bytes
 define('UNIT_MAX_SIZE', 509715200); //in bytes

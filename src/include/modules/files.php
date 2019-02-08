@@ -928,10 +928,18 @@ class FilesModule
 
 		$fullpath = $this->clearPathName( $unit->name . "/". $folder );
 
-		self::createFolder( $fullpath );
-		$this->result["msg"] = "folder created";
-		$this->result["data"] = $fullpath;
-		$this->result["status"] = 1;
+		if( self::createFolder( $fullpath ) == false )
+		{
+			$this->result["msg"] = "folder not created";
+			$this->result["data"] = $fullpath;
+			$this->result["status"] = -1;
+		}
+		else
+		{
+			$this->result["msg"] = "folder created";
+			$this->result["data"] = $fullpath;
+			$this->result["status"] = 1;
+		}
 	}
 
 	public function actionDownloadFolder()
@@ -1059,7 +1067,6 @@ class FilesModule
 
 		$this->result["msg"] = "folder deleted";
 		$this->result["unit"] = $this->getUnit( $unit->id );
-		$this->result["data"] = $fullpath;
 		$this->result["status"] = 1;
 	}
 
@@ -1228,6 +1235,9 @@ class FilesModule
 				$found = $this->searchFilesFromDBByCategory( $unit->id, $category );
 			else
 				$found = $this->searchFilesFromDBByFilename( $unit->id, $filename );
+			if(!$found)
+				continue;
+
 			foreach($found as $j => $file)
 			{
 				$file->unit = $unit->name;
@@ -1425,7 +1435,14 @@ class FilesModule
 			$metadata = $_REQUEST["metadata"];
 
 		//clean up the path name
+		//$path_info = pathinfo($folder);
 		$path_info = pathinfo($folder);
+		if(!isset($path_info["dirname"]))
+		{
+			debug("error, path_info doesnt have dirname.");
+			return false;		
+		}
+
 		$dirname = $path_info["dirname"];
 		$folder = $dirname . "/" . $path_info["basename"];
 		if( substr($folder, 0, 2) == "./" )
@@ -2759,7 +2776,7 @@ class FilesModule
 			$query = "SELECT units.*, users.username AS author FROM `".DB_PREFIX."units` AS units, `".DB_PREFIX."users` AS users WHERE `name` = '" . $name . "' AND units.author_id = users.id";
 
 		$result = $database->query( $query );
-		if(!$result)
+		if(!$result || $result->num_rows == 0)
 			return null;
 
 		$unit = $this->processUnit( $result->fetch_object() );
@@ -2781,7 +2798,7 @@ class FilesModule
 			$query = "SELECT units.*, users.username AS author FROM `".DB_PREFIX."units` AS units, `".DB_PREFIX."users` AS users WHERE `invite_token` = '" . $token . "' AND units.author_id = users.id";
 
 		$result = $database->query( $query );
-		if(!$result)
+		if(!$result || $result->num_rows == 0)
 			return null;
 
 		$unit = $this->processUnit( $result->fetch_object() );
@@ -3936,12 +3953,18 @@ class FilesModule
 			}
 			else //do not exist? create
 			{
-				mkdir( self::getFilesFolderName() . $current . $subdir );  
+				if( mkdir( self::getFilesFolderName() . $current . $subdir ) == false )
+				{
+					debug("folder couldnt be created");
+					return false;
+				}
 				chmod( self::getFilesFolderName() . $current . $subdir, 0775);
 			}
 
 			$current .= $subdir . "/";
 		}
+
+		return true;
 	}
 
 	private static function writeFile($fullpath, $data)
@@ -4149,7 +4172,7 @@ class FilesModule
 		$query = "SELECT file.*, unit.name AS unit_name FROM `".DB_PREFIX."files` AS file,`".DB_PREFIX."units` AS unit WHERE `unit_id` = ".intval($unit_id)." AND `folder` = '". $folder."' AND `filename` = '". $filename."' AND file.unit_id = unit.id LIMIT 1";
 
 		$result = $database->query( $query );
-		if (!$result)
+		if (!$result || $result->num_rows == 0)
 			return null;
 
 		$file_info = $result->fetch_object();
@@ -4172,7 +4195,7 @@ class FilesModule
 			$query = "SELECT * FROM `".DB_PREFIX."files` WHERE (`folder` = '" . $folder . "' " . $subfolders_str .") AND unit_id = ".intval($unit_id);
 		
 		$result = $database->query( $query );
-		if ($result === false) 
+		if ($result === false || $result->num_rows == 0)
 			return null;
 
 		$files = Array();
@@ -4195,7 +4218,7 @@ class FilesModule
 		//debug($query);
 
 		$result = $database->query( $query );
-		if (!$result) 
+		if (!$result || $result->num_rows == 0)
 			return null;
 
 		$files = Array();
@@ -4214,7 +4237,7 @@ class FilesModule
 		//debug($query);
 
 		$result = $database->query( $query );
-		if (!$result) 
+		if (!$result || $result->num_rows == 0)
 			return null;
 
 		$files = Array();
@@ -4236,7 +4259,7 @@ class FilesModule
 			$query .= " WHERE `unit_id` = " . $unit_id;
 
 		$result = $database->query( $query );
-		if (!$result) 
+		if (!$result || $result->num_rows == 0)
 			return false;
 		
 		while( $row = $result->fetch_object() )
