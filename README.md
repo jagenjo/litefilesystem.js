@@ -35,7 +35,7 @@ function onReady()
 
 function onLogin( my_session, err )
 {
-   if(!session)
+   if(!my_session)
       throw("error login in:", err);
    session = my_session;
 }
