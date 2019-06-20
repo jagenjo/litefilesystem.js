@@ -53,6 +53,7 @@ class FilesModule
 			case "moveFolder": $this->actionMoveFolder(); break; //move folder
 			case "getFilesInFolder": $this->actionGetFilesInFolder(); break; //get files inside one folder
 			case "getFilesTree": $this->actionGetFilesTree(); break; //get all files info
+			case "getUserPublicFiles": $this->actionGetUserPublicFiles(); break; //get files in public folder
 			case "searchFiles": $this->actionSearchFiles(); break; //get files matching a search
 			case "getFileInfo": $this->actionGetFileInfo(); break; //get metainfo about one file
 			case "folderExist": $this->actionFolderExist(); break; //get metainfo about one file
@@ -1204,6 +1205,70 @@ class FilesModule
 		$this->result["data"] = $dbfiles;
 	}
 
+	public function actionGetUserPublicFiles()
+	{
+		//get other user
+		$usermodule = getModule("user");
+
+		if(!isset($_REQUEST["username"]))
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'param missing';
+			return;		
+		}
+
+		$target_username = $_REQUEST["username"];
+		$target_user = null;
+		if( filter_var($target_username, FILTER_VALIDATE_EMAIL) )
+			$target_user = $usermodule->getUserByMail($target_username);
+		else
+			$target_user = $usermodule->getUserByName($target_username);
+
+		if(!$target_user)
+		{
+			$this->result["status"] = -1;
+			$this->result["msg"] = 'user not found';
+			return;
+		}
+
+		$unit_name = $target_user->username;
+		$folder = "public";
+
+		$unit = $this->getUnitByName( $unit_name, $target_user->id );
+		if(!$unit)
+		{
+			$this->result["status"] = -1;
+			debug("actionGetUserPublicFiles getUnitByName: " . $unit_name);
+			$this->result["msg"] = 'unit not found';
+			return;
+		}
+
+		//get files from DB
+		$dbfiles = $this->getFilesFromDB($unit->id, $folder);
+		if(!$dbfiles)
+		{
+			$this->result["msg"] = "no files";
+			$this->result["status"] = 1;
+			return;
+		}
+
+		//remove private info
+		foreach($dbfiles as $i => $file)
+		{
+			$file->unit = $unit_name;
+			$file->fullpath = $file->unit . "/" . $file->folder . "/" . $file->filename;
+			unset( $file->id );
+			unset( $file->author_id );
+			unset( $file->unit_id );
+			//unset( $file->folder );
+		}
+
+		$this->result["msg"] = "retrieving public files";
+		$this->result["status"] = 1;
+		$this->result["unit"] = $unit_name;
+		$this->result["folder"] = $folder;
+		$this->result["data"] = $dbfiles;
+	}
 
 	public function actionSearchFiles()
 	{

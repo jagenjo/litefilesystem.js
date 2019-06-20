@@ -198,10 +198,15 @@ if(!$console)
 
 			//TEST SAVING ONE FILE
 			//TEST RETRIEVING THAT FILE
+			//TEST DELETING THAT FILE
 
 			//READY
 			if( $system->checkReady() )
+			{
 				showMessage("LiteFileServer installed, you can go to the <a href='index.html'>main page</a>.","success");
+				if($console) 
+					chgrp( FILES_PATH, "www-data" );
+			}
 			else
 			{
 				showMessage("Something went wrong.","warning");
