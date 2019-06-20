@@ -41,8 +41,8 @@ define('ADMIN_MAIL',''); //CHANGE THIS
 It is also important to change the salts so your password cannot be broken
 ```php
 //System ****************************
-define('GLOBAL_PASS_SALT','pepper salt and other herbs'); //ENTER SOMETHING RANDOM HERE
-define('UNITNAME_SALT','sausages bacon and spam'); //ENTER SOMETHING RANDOM HERE
+define('GLOBAL_PASS_SALT','any random string, with 20 chars are enough'); //ENTER SOMETHING RANDOM HERE
+define('UNITNAME_SALT','another random string, with 20 chars are enough'); //ENTER SOMETHING RANDOM HERE
 ```
 
 ## Launch install script
@@ -59,6 +59,11 @@ In the root folder of the installation:
 
 ```bash
 php install.php
+```
+
+I recommend to force the files folder to have the same group as apache:
+```bash
+chown -R :www-data ../files
 ```
 
 ### From the browser
