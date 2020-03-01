@@ -23,6 +23,7 @@ class FilesModule
 
 	//called always
 	function __construct() {
+		$_REQUEST["folder"] = $_REQUEST["folder"] == "" ? "." : $_REQUEST["folder"];
 	}
 
 	public function processAction($action)
@@ -1180,6 +1181,7 @@ class FilesModule
 		}
 
 		//get files from DB
+		if( $folder == "" ) $folder = ".";
 		$dbfiles = $this->getFilesFromDB($unit->id, $folder);
 		if(!$dbfiles)
 		{
