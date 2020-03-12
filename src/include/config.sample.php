@@ -28,10 +28,9 @@ define('FILES_PATH','files/');  //folder where all the files will be stored
 define('PREVIEW_PREFIX','_th_'); //prefix added to the filename to designate a preview of a file
 define('PREVIEW_SUFIX','.jpg');  //sufix added to the filename of every preview
 define('USE_EXTENSIONS_WHITELIST',true); //in case you want to accept only some type of files
-define('EXTENSIONS_WHITELIST','png,jpg,jpeg,bmp,txt,json,js,css,html,htm,ttf,otf,webm,wav');
+define('EXTENSIONS_WHITELIST','png,jpg,jpeg,bmp,txt,json,js,css,html,htm,ttf,otf,webm,wav,svg,wbin,dae');
 define('USE_EXTENSIONS_BLACKLIST',true); //in case you want to ban some type of files
 define('EXTENSIONS_BLACKLIST','exe,o,dll,php,py,rb,app,apk,bat,cmd,com,inx,ipa,isu,job,lnk,msc,msi,msp,mst,osx,out,paf,pif,reg,run,rgs,sct,shb,shs,u3p,vb,vbe,vbs,ws,wsf');
-define('VALID_EXTENSIONS','png,jpg,jpeg,bmp,txt,json,js,css,html,htm,ttf,otf,wbin,dae');
 define('MAX_USERS_PER_UNIT', 1000);
 define('MAX_UNITS_PER_USER', 10); 
 define('DEFAULT_USER_SPACE', 10 ); //in MBs, (TODO: if 0 no limit)
