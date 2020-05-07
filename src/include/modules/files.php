@@ -2955,9 +2955,10 @@ class FilesModule
 			if($file_info->author_id != $user_id )
 			{
 				$unit = $this->getUnit( $unit_id, $user_id ); 
-				if( $unit->mode != "ADMIN") //WARNING!!! WHAT ABOUT THE QUOTA, IT WILL BE APPLYED TO HIM INSTEAD OF THE AUTHOR
+				//WARNING!!! WHAT ABOUT THE QUOTA, IT WILL BE APPLYED TO HIM INSTEAD OF THE AUTHOR
+				if( !$unit->mode || $unit->mode == "" || $unit->mode == "READ") 
 				{
-					debug("user removing file that doesnt belongs to him");
+					debug("user modifying file that doesnt belongs to him");
 					$this->last_error = "File belongs to other user";
 					return null;
 				}
