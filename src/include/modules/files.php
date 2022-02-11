@@ -23,7 +23,7 @@ class FilesModule
 
 	//called always
 	function __construct() {
-		$_REQUEST["folder"] = $_REQUEST["folder"] == "" ? "." : $_REQUEST["folder"];
+		if (isset($_REQUEST["folder"])) $_REQUEST["folder"] = $_REQUEST["folder"] == "" ? "." : $_REQUEST["folder"];
 	}
 
 	public function processAction($action)
