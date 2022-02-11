@@ -150,7 +150,7 @@ function getSQLDB()
 	if( $mysqli ) 
 		return $mysqli;
 
-	$mysqli = new mysqli("localhost",DB_USER, DB_PASSWORD);
+	$mysqli = new mysqli(DB_HOST, DB_USER, DB_PASSWORD);
 	if (mysqli_connect_errno())
 		return null; //die("SQL Error: " . mysqli_connect_error());
 
